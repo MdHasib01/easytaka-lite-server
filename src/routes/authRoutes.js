@@ -1,0 +1,12 @@
+const express = require('express');
+const router = express.Router();
+const authController = require('../controllers/authController');
+const { verifyToken, isAdmin } = require('../middleware/auth');
+
+router.post('/register', authController.register);
+router.post('/login', authController.login);
+router.get('/me', verifyToken, authController.getMe);
+router.put('/profile', verifyToken, authController.updateProfile);
+router.get('/smms', verifyToken, isAdmin, authController.listSMMs);
+
+module.exports = router;
