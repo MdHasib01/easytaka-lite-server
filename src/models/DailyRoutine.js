@@ -28,6 +28,26 @@ const dailyRoutineSchema = new mongoose.Schema(
           isDone: { type: Boolean, default: false },
         },
       ],
+      dynamicChecklist: [
+        {
+          templateId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'DailyTaskTemplate',
+          },
+          assignmentId: {
+            type: mongoose.Schema.Types.ObjectId,
+          },
+          title: { type: String },
+          taskType: { type: String },
+          mode: { type: String },
+          description: { type: String },
+          targetUrl: { type: String },
+          instructions: { type: String },
+          sampleCaption: { type: String },
+          isDone: { type: Boolean, default: false },
+          completedAt: { type: Date },
+        },
+      ],
     },
     completionPercentage: {
       type: Number,

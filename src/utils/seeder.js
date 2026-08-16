@@ -4,6 +4,7 @@ const Task = require('../models/Task');
 const TaskSubmission = require('../models/TaskSubmission');
 const PointTransaction = require('../models/PointTransaction');
 const SystemSetting = require('../models/SystemSetting');
+const DailyTaskTemplate = require('../models/DailyTaskTemplate');
 
 const seedInitialData = async () => {
   try {
@@ -148,7 +149,6 @@ const seedInitialData = async () => {
         },
       });
 
-      // Also create 1 pending account for Sarah to demonstrate the approval queue
       await FacebookAccount.create({
         smmId: smm1._id,
         accountName: 'Global Crypto & Web3 Explorer',
@@ -173,66 +173,126 @@ const seedInitialData = async () => {
       });
     }
 
-    // 5. Ensure Tasks exist
-    const taskCount = await Task.countDocuments();
-    if (taskCount === 0) {
-      const task1 = await Task.create({
-        title: 'Create Verified Facebook Account (US Identity)',
-        description: 'Create a new Facebook account with a realistic US name, profile photo, bio, and add 5 relevant group joins. Submit profile link and screenshot of completed profile page.',
-        taskType: 'create_account',
-        category: 'Account Creation',
-        rewardPoints: 100,
-        targetUrl: 'https://facebook.com',
-        instructions: '1. Use clean browser profile.\n2. Set 2FA with Authenticator.\n3. Add bio and avatar.\n4. Submit profile URL and screenshot.',
+    // 5. Ensure FB accounts exist for David
+    const davidAccountCount = await FacebookAccount.countDocuments({ smmId: smm2._id });
+    if (davidAccountCount === 0) {
+      await FacebookAccount.create({
+        smmId: smm2._id,
+        accountName: 'David Media Pro',
+        profileUrl: 'https://facebook.com/david.media.pro.99',
+        profileUid: '1000991188331',
+        emailOrPhone: 'david.media99@gmail.com',
+        status: 'active',
+        approvalStatus: 'approved',
+        pointsAwarded: 40,
+        approvedAt: new Date(),
+        accountCategory: 'Affiliate Marketing',
+        targetRegion: 'UK & Europe',
+        friendsCount: 890,
+        groupsCount: 14,
+        routineTargets: {
+          feedComments: 5,
+          communityReplies: 3,
+          storyPost: true,
+          groupShare: 2,
+          feedScrollMinutes: 10,
+        },
+      });
+    }
+
+    // 6. Ensure Global Rotated Daily Tasks and Quota Campaigns exist
+    const templateCount = await DailyTaskTemplate.countDocuments();
+    if (templateCount === 0) {
+      // Global Tasks Batch 1 (Runs on Alternate Days A)
+      await DailyTaskTemplate.create({
+        title: 'Personal Profile: Post Tech / AI Industry News',
+        taskType: 'personal_profile_post',
+        description: 'Post an engaging update on your personal profile timeline sharing an interesting thought or article about modern AI / Tech productivity tools.',
+        sampleCaption: 'AI tools are evolving so fast! What is your favorite productivity stack right now? 🚀 #TechTrends #Productivity',
+        mode: 'global_rotation',
+        rotationSchedule: 'alternate_days',
+        rotationBatch: 1,
+        status: 'active',
         createdBy: admin._id,
-        screenshotRequired: true,
-        profileLinkRequired: true,
-        isBroadcast: true,
-        deadline: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       });
 
-      const task2 = await Task.create({
-        title: 'Post 3 Thoughtful Comments on AI SaaS Discussion Post',
-        description: 'Go to the target Facebook post discussing marketing automation and post an insightful comment recommending our solutions.',
-        taskType: 'comment_post',
-        category: 'Viral Commenting',
-        rewardPoints: 40,
-        targetUrl: 'https://facebook.com/groups/digitalgrowthhackers/posts/99823123',
-        instructions: 'Comment should be at least 2 sentences. Take screenshot of your comment with timestamp.',
+      await DailyTaskTemplate.create({
+        title: 'Group React: Like & Love Top 3 Posts in Targeted Groups',
+        taskType: 'react_group_post',
+        description: 'Visit your active Facebook groups and react with Love/Care to at least 3 high-engagement community posts to maintain natural account activity.',
+        mode: 'global_rotation',
+        rotationSchedule: 'alternate_days',
+        rotationBatch: 1,
+        status: 'active',
         createdBy: admin._id,
-        screenshotRequired: true,
-        profileLinkRequired: true,
-        isBroadcast: true,
-        deadline: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
       });
 
-      const task3 = await Task.create({
-        title: 'Reply to Community Questions on Digital Marketers Group',
-        description: 'Answer questions in the Digital Marketers Group feed helping users with affiliate and media marketing strategies.',
-        taskType: 'community_reply',
-        category: 'Community Engagement',
-        rewardPoints: 60,
-        targetUrl: 'https://facebook.com/groups/digitalmarketingmasters',
-        instructions: 'Leave helpful replies. Add link to your profile and screenshot.',
+      await DailyTaskTemplate.create({
+        title: 'Story Post: Share Behind the Scenes / Quote Story',
+        taskType: 'story_post',
+        description: 'Upload a motivational quote or quick lifestyle photo to your Facebook Story to boost algorithmic reach and profile views.',
+        mode: 'global_rotation',
+        rotationSchedule: 'alternate_days',
+        rotationBatch: 1,
+        status: 'active',
         createdBy: admin._id,
-        screenshotRequired: true,
-        profileLinkRequired: true,
-        isBroadcast: true,
-        deadline: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
       });
 
-      // Sample submission for admin review
-      const acc1 = await FacebookAccount.findOne({ smmId: smm1._id });
-      await TaskSubmission.create({
-        taskId: task1._id,
-        smmId: smm1._id,
-        facebookAccountId: acc1 ? acc1._id : null,
-        profileUrl: 'https://facebook.com/sarah.jenkins.profile.98',
-        proofUrl: 'https://facebook.com/sarah.jenkins.profile.98',
-        screenshotUrl: 'https://images.unsplash.com/photo-1611162617213-7d7a39e9b1d7?w=800&auto=format&fit=crop&q=80',
-        smmNotes: 'Created account with US proxy, 2FA enabled, profile pic and cover uploaded.',
-        status: 'pending',
+      // Global Tasks Batch 2 (Runs on Alternate Days B)
+      await DailyTaskTemplate.create({
+        title: 'Personal Profile: Share Lifestyle / Work Question Post',
+        taskType: 'personal_profile_post',
+        description: 'Publish a friendly question on your personal timeline asking your friends for recommendations or advice to drive comment interactions.',
+        sampleCaption: 'Coffee or Tea while working? ☕ Drop your favorite morning fuel below! 👇',
+        mode: 'global_rotation',
+        rotationSchedule: 'alternate_days',
+        rotationBatch: 2,
+        status: 'active',
+        createdBy: admin._id,
       });
+
+      await DailyTaskTemplate.create({
+        title: 'Group React: React to Recent Questions in Niche Groups',
+        taskType: 'react_group_post',
+        description: 'Browse targeted marketing/business groups and react with insightful emojis to member questions and discussions.',
+        mode: 'global_rotation',
+        rotationSchedule: 'alternate_days',
+        rotationBatch: 2,
+        status: 'active',
+        createdBy: admin._id,
+      });
+
+      await DailyTaskTemplate.create({
+        title: 'Feed Warmup: Natural Feed Scrolling & Video Viewing',
+        taskType: 'feed_scroll_warmup',
+        description: 'Spend 5-10 minutes watching a trending reel/video in your feed and liking 2 organic creator posts to simulate authentic human behavior.',
+        mode: 'global_rotation',
+        rotationSchedule: 'alternate_days',
+        rotationBatch: 2,
+        status: 'active',
+        createdBy: admin._id,
+      });
+
+      // Targeted Quota Campaign (e.g. 10 comments needed on specific group post, load-balanced across accounts)
+      const allApproved = await FacebookAccount.find({ isActive: true, approvalStatus: { $in: ['approved', null] } });
+      const quotaTemplate = await DailyTaskTemplate.create({
+        title: 'Targeted Campaign: Post 10 Insightful Comments on Growth Hackers Post',
+        taskType: 'comment_group_post',
+        description: 'Leave positive, helpful comments discussing growth automation on the featured Facebook post.',
+        targetUrl: 'https://facebook.com/groups/growthhackers/posts/991823712',
+        instructions: 'Read the post topic. Leave a 2-sentence supportive comment. Avoid spam words.',
+        sampleCaption: 'Great insights! Automation has completely transformed how we manage multi-channel workflows.',
+        mode: 'targeted_quota',
+        targetExecutionsCount: Math.min(10, allApproved.length || 10),
+        status: 'active',
+        createdBy: admin._id,
+      });
+
+      // Assign quota using round-robin distribution
+      const taskDistributionService = require('../services/taskDistributionService');
+      await taskDistributionService.distributeQuotaTask(quotaTemplate._id, quotaTemplate.targetExecutionsCount);
+
+      console.log('[Seeder] Created 6 Global Rotated Daily Tasks and 1 Load-Balanced Quota Campaign.');
     }
 
     console.log('[Seeder] Seeding check completed.');

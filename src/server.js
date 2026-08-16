@@ -24,6 +24,7 @@ app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/accounts', require('./routes/accountRoutes'));
 app.use('/api/tasks', require('./routes/taskRoutes'));
 app.use('/api/daily', require('./routes/dailyRoutes'));
+app.use('/api/daily-tasks', require('./routes/dailyTaskManagerRoutes'));
 app.use('/api/stats', require('./routes/statsRoutes'));
 app.use('/api/settings', require('./routes/settingsRoutes'));
 app.use('/api/upload', require('./routes/uploadRoutes'));
