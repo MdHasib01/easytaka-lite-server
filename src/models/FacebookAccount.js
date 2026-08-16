@@ -27,6 +27,10 @@ const facebookAccountSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    password: {
+      type: String,
+      default: '',
+    },
     passwordHint: {
       type: String,
       default: '',

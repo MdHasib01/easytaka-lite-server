@@ -1,5 +1,6 @@
 const Task = require('../models/Task');
 const TaskSubmission = require('../models/TaskSubmission');
+const FacebookAccount = require('../models/FacebookAccount');
 const User = require('../models/User');
 const PointTransaction = require('../models/PointTransaction');
 
@@ -154,6 +155,21 @@ exports.submitTaskProof = async (req, res) => {
   try {
     const { taskId } = req.params;
     const { facebookAccountId, profileUrl, proofUrl, screenshotUrl, smmNotes } = req.body;
+
+    // Enforce 5 Facebook accounts requirement for SMM users
+    if (req.user.role !== 'admin') {
+      const activeAccountsCount = await FacebookAccount.countDocuments({
+        smmId: req.user._id,
+        isActive: true,
+      });
+
+      if (activeAccountsCount < 5) {
+        return res.status(403).json({
+          success: false,
+          message: `You must create at least 5 Facebook accounts before participating in tasks. (Currently: ${activeAccountsCount}/5)`,
+        });
+      }
+    }
 
     const task = await Task.findById(taskId);
     if (!task) {
