@@ -1,5 +1,7 @@
 require('dotenv').config();
 const http = require('http');
+const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
@@ -144,6 +146,37 @@ app.get('/api/health', (req, res) => {
     cors: 'active',
   });
 });
+
+// Optional Static Frontend Serving (with strict JS/CSS MIME types)
+const potentialDistPaths = [
+  path.join(__dirname, '../../easytaka-lite/dist'),
+  path.join(__dirname, '../dist'),
+  path.join(__dirname, '../../dist'),
+  path.join(process.cwd(), 'dist'),
+  path.join(process.cwd(), '../easytaka-lite/dist'),
+];
+
+const clientDistPath = potentialDistPaths.find((p) => fs.existsSync(p));
+
+if (clientDistPath) {
+  console.log(`📁 Serving client static build from: ${clientDistPath}`);
+  app.use(
+    express.static(clientDistPath, {
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith('.js') || filePath.endsWith('.mjs')) {
+          res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        } else if (filePath.endsWith('.css')) {
+          res.setHeader('Content-Type', 'text/css; charset=utf-8');
+        }
+      },
+    })
+  );
+
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) return next();
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
+}
 
 // Global Error Handler with CORS preservation
 app.use((err, req, res, next) => {
