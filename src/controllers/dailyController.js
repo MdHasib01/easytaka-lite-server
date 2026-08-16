@@ -314,6 +314,16 @@ exports.updateRoutineProgress = async (req, res) => {
         });
 
         dailyRewardAwarded = true;
+
+        // Emit real-time celebration notification
+        const { sendNotificationToUser } = require('../socket');
+        sendNotificationToUser(user._id, {
+          type: 'daily_reward',
+          title: '🏆 100% Daily Routine Completed!',
+          message: `Awesome work! You completed 100% of today's tasks and claimed +${dailyRewardAmount} PTS!`,
+          link: '/daily',
+          points: dailyRewardAmount,
+        });
       }
     }
 

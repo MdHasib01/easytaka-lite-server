@@ -3,6 +3,7 @@ const TaskSubmission = require('../models/TaskSubmission');
 const FacebookAccount = require('../models/FacebookAccount');
 const User = require('../models/User');
 const PointTransaction = require('../models/PointTransaction');
+const { sendNotificationToUser, sendNotificationToRole } = require('../socket');
 
 // Create a new task (Admin only)
 exports.createTask = async (req, res) => {
@@ -42,6 +43,25 @@ exports.createTask = async (req, res) => {
       createdBy: req.user._id,
       status: 'active',
     });
+
+    // Notify SMM agents
+    if (task.isBroadcast) {
+      sendNotificationToRole('smm', {
+        type: 'new_task',
+        title: '⚡ New Facebook Task Available',
+        message: `"${task.title}" (+${task.rewardPoints} PTS) is now open for submissions.`,
+        link: '/tasks?tab=available',
+        points: task.rewardPoints,
+      });
+    } else if (assignedTo) {
+      sendNotificationToUser(assignedTo, {
+        type: 'new_task',
+        title: '⚡ Direct Task Assigned',
+        message: `You were assigned "${task.title}" (+${task.rewardPoints} PTS).`,
+        link: '/tasks?tab=available',
+        points: task.rewardPoints,
+      });
+    }
 
     return res.status(201).json({
       success: true,
@@ -218,6 +238,14 @@ exports.submitTaskProof = async (req, res) => {
       .populate('taskId', 'title rewardPoints taskType')
       .populate('facebookAccountId', 'accountName profileUrl');
 
+    // Notify Admins
+    sendNotificationToRole('admin', {
+      type: 'new_submission',
+      title: '📋 New Task Proof Submitted',
+      message: `${req.user.name} submitted proof for "${task.title}".`,
+      link: '/verifications',
+    });
+
     return res.status(201).json({
       success: true,
       message: 'Proof submitted successfully! Awaiting admin verification.',
@@ -316,6 +344,15 @@ exports.verifySubmission = async (req, res) => {
       submission.verifiedAt = new Date();
       await submission.save();
 
+      // Emit real-time notification to SMM
+      sendNotificationToUser(smmUser._id, {
+        type: 'task_approved',
+        title: '🎉 Task Approved & Rewarded!',
+        message: `Your proof for "${submission.taskId ? submission.taskId.title : 'Task'}" was approved. +${totalPoints} PTS credited!`,
+        link: '/tasks?tab=completed',
+        points: totalPoints,
+      });
+
       return res.json({
         success: true,
         message: `Task approved! ${totalPoints} points awarded to ${smmUser.name}.`,
@@ -335,6 +372,14 @@ exports.verifySubmission = async (req, res) => {
       submission.verifiedBy = req.user._id;
       submission.verifiedAt = new Date();
       await submission.save();
+
+      // Emit real-time notification to SMM
+      sendNotificationToUser(smmUser._id, {
+        type: 'task_rejected',
+        title: '⚠️ Task Revision Required',
+        message: `Your proof for "${submission.taskId ? submission.taskId.title : 'Task'}" was declined. Reason: ${adminNote.trim()}`,
+        link: '/tasks?tab=rejected',
+      });
 
       return res.json({
         success: true,

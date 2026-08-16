@@ -2,6 +2,7 @@ const FacebookAccount = require('../models/FacebookAccount');
 const User = require('../models/User');
 const PointTransaction = require('../models/PointTransaction');
 const SystemSetting = require('../models/SystemSetting');
+const { sendNotificationToUser, sendNotificationToRole } = require('../socket');
 
 // Create a new Facebook account record (SMM or Admin)
 exports.createAccount = async (req, res) => {
@@ -55,6 +56,15 @@ exports.createAccount = async (req, res) => {
         feedScrollMinutes: 10,
       },
     });
+
+    if (!isAdmin) {
+      sendNotificationToRole('admin', {
+        type: 'new_account',
+        title: 'New Facebook Profile Submitted',
+        message: `${req.user.name} submitted "${accountName}" for verification.`,
+        link: '/verifications',
+      });
+    }
 
     return res.status(201).json({
       success: true,
@@ -238,6 +248,25 @@ exports.verifyAccount = async (req, res) => {
       account.status = account.status === 'banned' ? 'banned' : 'active';
       await account.save();
 
+      // Emit real-time notification to SMM
+      sendNotificationToUser(smmUser._id, {
+        type: 'account_approved',
+        title: '🎉 Facebook Profile Approved!',
+        message: `Your Facebook profile "${account.accountName}" was approved. +${basePoints} PTS credited!`,
+        link: '/accounts',
+        points: basePoints,
+      });
+
+      if (milestoneAwarded) {
+        sendNotificationToUser(smmUser._id, {
+          type: 'milestone_unlocked',
+          title: '🎁 5-Account Milestone Bonus!',
+          message: `Incredible! You reached ${totalApprovedCount} approved accounts. +${milestoneBonusAmount} PTS Bonus credited!`,
+          link: '/accounts',
+          points: milestoneBonusAmount,
+        });
+      }
+
       return res.json({
         success: true,
         message: milestoneAwarded
@@ -263,6 +292,13 @@ exports.verifyAccount = async (req, res) => {
       account.approvedBy = req.user._id;
       account.approvedAt = new Date();
       await account.save();
+
+      sendNotificationToUser(smmUser._id, {
+        type: 'account_rejected',
+        title: '⚠️ Facebook Profile Declined',
+        message: `"${account.accountName}" was declined by admin. Reason: ${adminNote.trim()}`,
+        link: '/accounts',
+      });
 
       return res.json({
         success: true,

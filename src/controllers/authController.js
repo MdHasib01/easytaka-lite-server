@@ -184,6 +184,15 @@ exports.completeSmmOnboarding = async (req, res) => {
 
     await user.save();
 
+    // Notify Admins in real-time
+    const { sendNotificationToRole } = require('../socket');
+    sendNotificationToRole('admin', {
+      type: 'new_smm_verification',
+      title: '📝 New SMM Application Submitted',
+      message: `${user.name} (${user.email}) submitted National ID documents for verification.`,
+      link: '/verifications',
+    });
+
     return res.json({
       success: true,
       message: 'Account details and National ID submitted successfully. Your account is now pending admin verification.',

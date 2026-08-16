@@ -81,6 +81,15 @@ exports.createDailyTask = async (req, res) => {
       .populate('assignedAssignments.accountId', 'accountName profileUrl avatarUrl')
       .populate('assignedAssignments.smmId', 'name email');
 
+    // Notify SMM agents
+    const { sendNotificationToRole } = require('../socket');
+    sendNotificationToRole('smm', {
+      type: 'new_task',
+      title: template.mode === 'targeted_quota' ? '⚡ New Targeted Campaign Task' : '⚡ New Daily Engagement Task',
+      message: `"${template.title}" has been assigned to active accounts.`,
+      link: '/daily',
+    });
+
     return res.status(201).json({
       success: true,
       message: `Daily task "${template.title}" created successfully!`,
