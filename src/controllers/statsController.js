@@ -16,7 +16,9 @@ exports.getDashboardStats = async (req, res) => {
         totalSmms,
         totalTasks,
         activeTasks,
-        pendingVerifications,
+        pendingTaskVerifications,
+        pendingAccountVerifications,
+        pendingSmmVerifications,
         totalAccounts,
         recentSubmissions,
       ] = await Promise.all([
@@ -24,6 +26,8 @@ exports.getDashboardStats = async (req, res) => {
         Task.countDocuments(),
         Task.countDocuments({ status: 'active' }),
         TaskSubmission.countDocuments({ status: 'pending' }),
+        FacebookAccount.countDocuments({ approvalStatus: 'pending', isActive: true }),
+        User.countDocuments({ role: 'smm', status: 'pending_verification' }),
         FacebookAccount.countDocuments({ isActive: true }),
         TaskSubmission.find()
           .sort({ createdAt: -1 })
@@ -31,6 +35,8 @@ exports.getDashboardStats = async (req, res) => {
           .populate('smmId', 'name email avatar')
           .populate('taskId', 'title rewardPoints taskType'),
       ]);
+
+      const pendingVerifications = pendingTaskVerifications + pendingAccountVerifications + pendingSmmVerifications;
 
       // Total points awarded
       const pointAggregation = await PointTransaction.aggregate([
@@ -46,6 +52,9 @@ exports.getDashboardStats = async (req, res) => {
           totalTasks,
           activeTasks,
           pendingVerifications,
+          pendingTaskVerifications,
+          pendingAccountVerifications,
+          pendingSmmVerifications,
           totalAccounts,
           totalPointsAwarded,
         },

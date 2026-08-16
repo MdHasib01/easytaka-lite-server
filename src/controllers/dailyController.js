@@ -1,6 +1,8 @@
 const DailyRoutine = require('../models/DailyRoutine');
 const FacebookAccount = require('../models/FacebookAccount');
 const User = require('../models/User');
+const PointTransaction = require('../models/PointTransaction');
+const SystemSetting = require('../models/SystemSetting');
 
 const getTodayString = () => {
   const d = new Date();
@@ -59,7 +61,15 @@ const computePercentage = (routine, account) => {
 exports.getTodayRoutines = async (req, res) => {
   try {
     const targetDate = req.query.date || getTodayString();
+    const user = await User.findById(req.user._id);
     const accounts = await FacebookAccount.find({ smmId: req.user._id, isActive: true });
+    const settings = await SystemSetting.getSettings();
+
+    const dailyReward = user?.dailyTaskCompletionReward !== undefined 
+      ? user.dailyTaskCompletionReward 
+      : (settings.defaultDailyCompletionReward || 50);
+
+    const dailyRewardClaimedToday = user?.lastDailyRewardDate === targetDate;
 
     if (accounts.length === 0) {
       return res.json({
@@ -68,6 +78,8 @@ exports.getTodayRoutines = async (req, res) => {
         totalAccounts: 0,
         overallProgress: 0,
         completedAccountsCount: 0,
+        dailyTaskCompletionReward: dailyReward,
+        dailyRewardClaimedToday,
         routines: [],
       });
     }
@@ -112,6 +124,7 @@ exports.getTodayRoutines = async (req, res) => {
           profileUrl: account.profileUrl,
           avatarUrl: account.avatarUrl,
           status: account.status,
+          approvalStatus: account.approvalStatus || 'approved',
           routineTargets: account.routineTargets,
         },
       });
@@ -125,6 +138,8 @@ exports.getTodayRoutines = async (req, res) => {
       totalAccounts: accounts.length,
       overallProgress,
       completedAccountsCount,
+      dailyTaskCompletionReward: dailyReward,
+      dailyRewardClaimedToday,
       routines,
     });
   } catch (error) {
@@ -176,7 +191,7 @@ exports.updateRoutineProgress = async (req, res) => {
     routine.isCompleted = isCompleted;
     await routine.save();
 
-    // Check overall progress for streak
+    // Check overall progress across all user's active accounts
     const allAccounts = await FacebookAccount.find({ smmId: req.user._id, isActive: true });
     const allRoutines = await DailyRoutine.find({ smmId: req.user._id, date: targetDate });
 
@@ -184,21 +199,45 @@ exports.updateRoutineProgress = async (req, res) => {
     allRoutines.forEach((r) => (totalSum += r.completionPercentage));
     const overallProgress = allAccounts.length > 0 ? Math.round(totalSum / allAccounts.length) : 0;
 
-    // Update streak if 100% completed today
+    let dailyRewardAwarded = false;
+    let dailyRewardAmount = 0;
+
+    // Check if 100% completed today and reward not yet claimed for targetDate
     if (overallProgress === 100) {
       const user = await User.findById(req.user._id);
-      if (user && user.lastActiveDate !== targetDate) {
+      if (user && user.lastDailyRewardDate !== targetDate) {
+        const settings = await SystemSetting.getSettings();
+        dailyRewardAmount = user.dailyTaskCompletionReward !== undefined && user.dailyTaskCompletionReward > 0
+          ? user.dailyTaskCompletionReward
+          : (settings.defaultDailyCompletionReward || 50);
+
+        user.rewardPoints += dailyRewardAmount;
         user.streakDays = (user.streakDays || 0) + 1;
         user.lastActiveDate = targetDate;
+        user.lastDailyRewardDate = targetDate;
         await user.save();
+
+        await PointTransaction.create({
+          userId: user._id,
+          amount: dailyRewardAmount,
+          type: 'daily_bonus',
+          description: `Daily task completion reward for ${targetDate} (100% completed)`,
+          balanceAfter: user.rewardPoints,
+        });
+
+        dailyRewardAwarded = true;
       }
     }
 
     return res.json({
       success: true,
-      message: 'Daily progress updated!',
+      message: dailyRewardAwarded
+        ? `🎉 Incredible! You completed all daily tasks and earned +${dailyRewardAmount} PTS!`
+        : 'Daily progress updated!',
       routine,
       overallProgress,
+      dailyRewardAwarded,
+      dailyRewardAmount,
     });
   } catch (error) {
     console.error('Update daily routine error:', error);

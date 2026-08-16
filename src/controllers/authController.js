@@ -258,6 +258,7 @@ exports.login = async (req, res) => {
         role: user.role,
         status: user.status,
         rewardPoints: user.rewardPoints,
+        dailyTaskCompletionReward: user.dailyTaskCompletionReward !== undefined ? user.dailyTaskCompletionReward : 50,
         avatar: user.avatar,
         phone: user.phone,
         streakDays: user.streakDays,
@@ -282,6 +283,7 @@ exports.getMe = async (req, res) => {
         role: user.role,
         status: user.status,
         rewardPoints: user.rewardPoints,
+        dailyTaskCompletionReward: user.dailyTaskCompletionReward !== undefined ? user.dailyTaskCompletionReward : 50,
         avatar: user.avatar,
         phone: user.phone,
         streakDays: user.streakDays,
@@ -460,3 +462,38 @@ exports.listSMMs = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// Admin update specific SMM's daily task completion reward
+exports.updateSmmDailyReward = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { dailyTaskCompletionReward } = req.body;
+
+    if (dailyTaskCompletionReward === undefined || isNaN(dailyTaskCompletionReward)) {
+      return res.status(400).json({ success: false, message: 'Please provide a valid daily task reward point amount.' });
+    }
+
+    const smm = await User.findById(id);
+    if (!smm) {
+      return res.status(404).json({ success: false, message: 'SMM User not found.' });
+    }
+
+    smm.dailyTaskCompletionReward = Math.max(0, Number(dailyTaskCompletionReward));
+    await smm.save();
+
+    return res.json({
+      success: true,
+      message: `Daily task completion reward updated to ${smm.dailyTaskCompletionReward} PTS for ${smm.name || smm.email}.`,
+      smm: {
+        id: smm._id,
+        name: smm.name,
+        email: smm.email,
+        dailyTaskCompletionReward: smm.dailyTaskCompletionReward,
+      },
+    });
+  } catch (error) {
+    console.error('Update SMM daily reward error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+

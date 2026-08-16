@@ -86,12 +86,21 @@ const userSchema = new mongoose.Schema(
       default: 0,
       min: 0,
     },
+    dailyTaskCompletionReward: {
+      type: Number,
+      default: 50,
+      min: 0,
+    },
     streakDays: {
       type: Number,
       default: 0,
     },
     lastActiveDate: {
       type: String, // YYYY-MM-DD
+      default: '',
+    },
+    lastDailyRewardDate: {
+      type: String, // YYYY-MM-DD to ensure 1 daily reward per day
       default: '',
     },
     isActive: {

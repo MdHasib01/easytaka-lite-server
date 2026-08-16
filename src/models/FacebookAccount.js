@@ -76,6 +76,28 @@ const facebookAccountSchema = new mongoose.Schema(
       groupShare: { type: Number, default: 2 },
       feedScrollMinutes: { type: Number, default: 10 },
     },
+    approvalStatus: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'pending',
+    },
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    approvedAt: {
+      type: Date,
+      default: null,
+    },
+    adminNote: {
+      type: String,
+      default: '',
+    },
+    pointsAwarded: {
+      type: Number,
+      default: 0,
+    },
     isActive: {
       type: Boolean,
       default: true,

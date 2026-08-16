@@ -25,6 +25,7 @@ app.use('/api/accounts', require('./routes/accountRoutes'));
 app.use('/api/tasks', require('./routes/taskRoutes'));
 app.use('/api/daily', require('./routes/dailyRoutes'));
 app.use('/api/stats', require('./routes/statsRoutes'));
+app.use('/api/settings', require('./routes/settingsRoutes'));
 app.use('/api/upload', require('./routes/uploadRoutes'));
 
 // Health Check

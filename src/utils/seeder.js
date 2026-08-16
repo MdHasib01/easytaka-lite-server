@@ -3,9 +3,13 @@ const FacebookAccount = require('../models/FacebookAccount');
 const Task = require('../models/Task');
 const TaskSubmission = require('../models/TaskSubmission');
 const PointTransaction = require('../models/PointTransaction');
+const SystemSetting = require('../models/SystemSetting');
 
 const seedInitialData = async () => {
   try {
+    // 0. Ensure System Settings exist
+    await SystemSetting.getSettings();
+
     // 1. Ensure Admin exists and has known password
     let admin = await User.findOne({ email: 'admin@esytaka.com' });
     if (!admin) {
@@ -17,6 +21,7 @@ const seedInitialData = async () => {
         status: 'active',
         phone: '+1 234 567 8900',
         rewardPoints: 500,
+        dailyTaskCompletionReward: 50,
         avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
       });
       await admin.save();
@@ -37,6 +42,7 @@ const seedInitialData = async () => {
         status: 'active',
         phone: '+880 1712 345678',
         rewardPoints: 340,
+        dailyTaskCompletionReward: 75,
         streakDays: 4,
         avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
       });
@@ -58,6 +64,7 @@ const seedInitialData = async () => {
         status: 'active',
         phone: '+880 1819 888999',
         rewardPoints: 620,
+        dailyTaskCompletionReward: 60,
         streakDays: 7,
         avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
       });
@@ -93,13 +100,16 @@ const seedInitialData = async () => {
     // 4. Ensure FB accounts exist for Sarah
     const accountCount = await FacebookAccount.countDocuments({ smmId: smm1._id });
     if (accountCount === 0) {
-      const acc1 = await FacebookAccount.create({
+      await FacebookAccount.create({
         smmId: smm1._id,
         accountName: 'Sarah Jenkins (Tech Influencer)',
         profileUrl: 'https://facebook.com/sarah.jenkins.profile.98',
         profileUid: '1000889218271',
         emailOrPhone: 'sarah.j.fb98@gmail.com',
         status: 'active',
+        approvalStatus: 'approved',
+        pointsAwarded: 40,
+        approvedAt: new Date(),
         accountCategory: 'Tech / SaaS Niche',
         targetRegion: 'USA & Canada',
         friendsCount: 1420,
@@ -121,6 +131,9 @@ const seedInitialData = async () => {
         profileUid: '1000994821124',
         emailOrPhone: 'dailytrends.bd@gmail.com',
         status: 'warmup',
+        approvalStatus: 'approved',
+        pointsAwarded: 40,
+        approvedAt: new Date(),
         accountCategory: 'E-commerce & Local Marketing',
         targetRegion: 'Bangladesh & Asia',
         friendsCount: 450,
@@ -131,6 +144,30 @@ const seedInitialData = async () => {
           communityReplies: 2,
           storyPost: true,
           groupShare: 1,
+          feedScrollMinutes: 10,
+        },
+      });
+
+      // Also create 1 pending account for Sarah to demonstrate the approval queue
+      await FacebookAccount.create({
+        smmId: smm1._id,
+        accountName: 'Global Crypto & Web3 Explorer',
+        profileUrl: 'https://facebook.com/crypto.web3.explorer.sarah',
+        profileUid: '1000999812455',
+        emailOrPhone: 'crypto.sarah99@gmail.com',
+        status: 'warmup',
+        approvalStatus: 'pending',
+        pointsAwarded: 0,
+        accountCategory: 'Crypto & Finance',
+        targetRegion: 'Global / Tier 1',
+        friendsCount: 120,
+        groupsCount: 8,
+        notes: 'Newly registered account with proxy. Ready for approval.',
+        routineTargets: {
+          feedComments: 5,
+          communityReplies: 3,
+          storyPost: true,
+          groupShare: 2,
           feedScrollMinutes: 10,
         },
       });

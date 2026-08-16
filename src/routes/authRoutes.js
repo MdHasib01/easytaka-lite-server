@@ -18,5 +18,6 @@ router.get('/smm-verifications', verifyToken, isAdmin, authController.listSmmVer
 router.post('/verify-smm/:id', verifyToken, isAdmin, authController.verifySmm);
 router.post('/resend-invite/:id', verifyToken, isAdmin, authController.resendInvitation);
 router.get('/smms', verifyToken, isAdmin, authController.listSMMs);
+router.put('/smms/:id/daily-reward', verifyToken, isAdmin, authController.updateSmmDailyReward);
 
 module.exports = router;

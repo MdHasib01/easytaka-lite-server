@@ -13,7 +13,15 @@ const pointTransactionSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ['task_reward', 'daily_bonus', 'streak_reward', 'admin_bonus', 'manual_adjustment'],
+      enum: [
+        'task_reward',
+        'daily_bonus',
+        'streak_reward',
+        'admin_bonus',
+        'manual_adjustment',
+        'account_reward',
+        'milestone_bonus',
+      ],
       default: 'task_reward',
     },
     description: {
