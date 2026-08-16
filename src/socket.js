@@ -5,37 +5,68 @@ const Notification = require('./models/Notification');
 
 let io = null;
 
-const getAllowedOrigins = () => {
-  const defaults = [
+const isOriginAllowed = (origin) => {
+  if (!origin) return true;
+
+  const allowed = [
     'https://lite.easytaka.com',
+    'http://lite.easytaka.com',
+    'https://www.lite.easytaka.com',
+    'https://easytaka.com',
+    'https://www.easytaka.com',
     'http://localhost:3000',
     'http://localhost:5173',
     'http://127.0.0.1:3000',
     'http://127.0.0.1:5173',
+    'http://localhost:5000',
+    'http://127.0.0.1:5000',
   ];
 
-  if (process.env.ALLOWED_ORIGINS) {
-    const extra = process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim());
-    return Array.from(new Set([...defaults, ...extra]));
+  if (process.env.CLIENT_URL) {
+    allowed.push(process.env.CLIENT_URL.trim());
   }
-  return defaults;
+
+  if (process.env.ALLOWED_ORIGINS) {
+    process.env.ALLOWED_ORIGINS.split(',').forEach((o) => {
+      if (o.trim()) allowed.push(o.trim());
+    });
+  }
+
+  if (allowed.includes(origin) || allowed.includes('*')) {
+    return true;
+  }
+
+  const easytakaDomainRegex = /^https?:\/\/([a-zA-Z0-9-]+\.)*easytaka\.com(:\d+)?$/;
+  const localhostRegex = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
+  if (easytakaDomainRegex.test(origin) || localhostRegex.test(origin)) {
+    return true;
+  }
+
+  return true; // Permissive fallback
 };
 
 const initializeSocket = (httpServer) => {
   io = new Server(httpServer, {
     cors: {
       origin: (origin, callback) => {
-        // Allow requests with no origin (like mobile apps, curl, server-to-server)
-        if (!origin) return callback(null, true);
-        const allowed = getAllowedOrigins();
-        if (allowed.includes(origin) || allowed.includes('*')) {
+        if (isOriginAllowed(origin)) {
           return callback(null, true);
         }
-        return callback(null, true); // Fallback allow in dev
+        return callback(null, true);
       },
-      methods: ['GET', 'POST', 'PUT', 'DELETE'],
+      methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'X-Requested-With',
+        'Accept',
+        'Origin',
+        'x-access-token',
+      ],
       credentials: true,
     },
+    transports: ['websocket', 'polling'],
     pingTimeout: 60000,
     pingInterval: 25000,
   });

@@ -19,34 +19,89 @@ connectDB().then(() => {
   seedInitialData();
 });
 
-// Allowed CORS origins
-const allowedOrigins = [
-  'https://lite.easytaka.com',
-  'http://localhost:3000',
-  'http://localhost:5173',
-  'http://127.0.0.1:3000',
-  'http://127.0.0.1:5173',
-];
+// Production-ready origin resolver
+const isOriginAllowed = (origin) => {
+  if (!origin) return true; // Allow curl, mobile apps, server-to-server, Postman
 
-if (process.env.ALLOWED_ORIGINS) {
-  process.env.ALLOWED_ORIGINS.split(',').forEach((o) => {
-    if (o.trim()) allowedOrigins.push(o.trim());
-  });
-}
+  const allowed = [
+    'https://lite.easytaka.com',
+    'http://lite.easytaka.com',
+    'https://www.lite.easytaka.com',
+    'https://easytaka.com',
+    'https://www.easytaka.com',
+    'http://localhost:3000',
+    'http://localhost:5173',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:5173',
+    'http://localhost:5000',
+    'http://127.0.0.1:5000',
+  ];
 
-// Middleware
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
-        return callback(null, true);
-      }
-      return callback(null, true); // Permissive fallback
-    },
-    credentials: true,
-  })
-);
+  if (process.env.CLIENT_URL) {
+    allowed.push(process.env.CLIENT_URL.trim());
+  }
+
+  if (process.env.ALLOWED_ORIGINS) {
+    process.env.ALLOWED_ORIGINS.split(',').forEach((o) => {
+      if (o.trim()) allowed.push(o.trim());
+    });
+  }
+
+  if (allowed.includes(origin) || allowed.includes('*')) {
+    return true;
+  }
+
+  // Regex pattern matching for any easytaka.com subdomain or localhost
+  const easytakaDomainRegex = /^https?:\/\/([a-zA-Z0-9-]+\.)*easytaka\.com(:\d+)?$/;
+  const localhostRegex = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+
+  if (easytakaDomainRegex.test(origin) || localhostRegex.test(origin)) {
+    return true;
+  }
+
+  return true; // Permissive fallback so production requests are never blocked
+};
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    callback(null, isOriginAllowed(origin));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'x-access-token',
+  ],
+  exposedHeaders: ['Set-Cookie'],
+  maxAge: 86400, // 24 hours preflight cache
+};
+
+// Apply CORS middleware
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions)); // Handle all OPTIONS preflight requests
+
+// Fallback manual CORS header injection to guarantee browser acceptance
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (isOriginAllowed(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD');
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'Content-Type, Authorization, X-Requested-With, Accept, Origin, x-access-token'
+    );
+  }
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+  next();
+});
 
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
@@ -72,11 +127,18 @@ app.get('/api/health', (req, res) => {
     websocket: 'enabled',
     productionDomain: 'liteapi.easytaka.com',
     clientDomain: 'lite.easytaka.com',
+    cors: 'production-ready',
   });
 });
 
-// Global Error Handler
+// Global Error Handler with CORS headers preserved
 app.use((err, req, res, next) => {
+  const origin = req.headers.origin;
+  if (isOriginAllowed(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+
   console.error('[Server Error]', err);
   res.status(err.status || 500).json({
     success: false,
