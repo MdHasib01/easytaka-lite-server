@@ -5,7 +5,7 @@ const userSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: true,
+      default: '',
       trim: true,
     },
     email: {
@@ -17,18 +17,67 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: true,
+      default: '',
     },
     role: {
       type: String,
       enum: ['admin', 'smm'],
       default: 'smm',
     },
+    status: {
+      type: String,
+      enum: ['invited', 'pending_verification', 'active', 'rejected', 'suspended'],
+      default: 'active',
+    },
+    invitationToken: {
+      type: String,
+      default: '',
+    },
+    invitationExpires: {
+      type: Date,
+    },
     avatar: {
       type: String,
       default: '',
     },
     phone: {
+      type: String,
+      default: '',
+    },
+    nidFront: {
+      type: String,
+      default: '',
+    },
+    nidBack: {
+      type: String,
+      default: '',
+    },
+    nidNumber: {
+      type: String,
+      default: '',
+    },
+    address: {
+      type: String,
+      default: '',
+    },
+    termsAgreed: {
+      type: Boolean,
+      default: false,
+    },
+    termsAgreedAt: {
+      type: Date,
+    },
+    verificationSubmittedAt: {
+      type: Date,
+    },
+    verifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    verifiedAt: {
+      type: Date,
+    },
+    rejectionReason: {
       type: String,
       default: '',
     },

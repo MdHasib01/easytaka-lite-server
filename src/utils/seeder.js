@@ -14,12 +14,16 @@ const seedInitialData = async () => {
         email: 'admin@esytaka.com',
         password: 'admin123',
         role: 'admin',
+        status: 'active',
         phone: '+1 234 567 8900',
         rewardPoints: 500,
         avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
       });
       await admin.save();
       console.log('[Seeder] Created default Admin (admin@esytaka.com / admin123)');
+    } else if (admin.status !== 'active') {
+      admin.status = 'active';
+      await admin.save();
     }
 
     // 2. Ensure Demo SMM exists and has known password
@@ -30,6 +34,7 @@ const seedInitialData = async () => {
         email: 'smm@esytaka.com',
         password: 'smm123',
         role: 'smm',
+        status: 'active',
         phone: '+880 1712 345678',
         rewardPoints: 340,
         streakDays: 4,
@@ -37,6 +42,9 @@ const seedInitialData = async () => {
       });
       await smm1.save();
       console.log('[Seeder] Created default SMM (smm@esytaka.com / smm123)');
+    } else if (smm1.status !== 'active') {
+      smm1.status = 'active';
+      await smm1.save();
     }
 
     // 3. Ensure SMM 2 exists
@@ -47,12 +55,39 @@ const seedInitialData = async () => {
         email: 'david@esytaka.com',
         password: 'smm123',
         role: 'smm',
+        status: 'active',
         phone: '+880 1819 888999',
         rewardPoints: 620,
         streakDays: 7,
         avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
       });
       await smm2.save();
+    } else if (smm2.status !== 'active') {
+      smm2.status = 'active';
+      await smm2.save();
+    }
+
+    // 3.5. Ensure a sample Pending Verification SMM exists for Admin to test review
+    let smmPending = await User.findOne({ email: 'tanvir.media@gmail.com' });
+    if (!smmPending) {
+      smmPending = new User({
+        name: 'Tanvir Hossain',
+        email: 'tanvir.media@gmail.com',
+        password: 'smmpassword123',
+        role: 'smm',
+        status: 'pending_verification',
+        phone: '+880 1798 765432',
+        address: 'House 42, Road 11, Banani, Dhaka-1213, Bangladesh',
+        nidNumber: '5928193821092',
+        nidFront: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?w=800&auto=format&fit=crop&q=80',
+        nidBack: 'https://images.unsplash.com/photo-1554224155-8d04cb21cd6c?w=800&auto=format&fit=crop&q=80',
+        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+        termsAgreed: true,
+        termsAgreedAt: new Date(Date.now() - 3600000 * 4),
+        verificationSubmittedAt: new Date(Date.now() - 3600000 * 4),
+      });
+      await smmPending.save();
+      console.log('[Seeder] Created sample pending SMM applicant (tanvir.media@gmail.com)');
     }
 
     // 4. Ensure FB accounts exist for Sarah
