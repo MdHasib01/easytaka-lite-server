@@ -295,6 +295,55 @@ const seedInitialData = async () => {
       console.log('[Seeder] Created 6 Global Rotated Daily Tasks and 1 Load-Balanced Quota Campaign.');
     }
 
+    // 7. Ensure Broadcast Tasks Hub has initial tasks including Create Facebook Account task
+    const taskCount = await Task.countDocuments();
+    if (taskCount === 0) {
+      await Task.create({
+        title: 'Create Verified Facebook Profile with 2FA',
+        description: 'Create a realistic Facebook profile with genuine avatar, cover photo, bio details and 2-Factor Authentication enabled. Submit profile URL and screenshot proof to claim reward points.',
+        taskType: 'create_account',
+        category: 'Account Creation',
+        rewardPoints: 100,
+        instructions: '1. Register with a fresh email or phone.\n2. Set up realistic name, profile picture and bio.\n3. Turn on 2FA security.\n4. Submit profile URL and screenshot.',
+        isBroadcast: true,
+        screenshotRequired: true,
+        profileLinkRequired: true,
+        createdBy: admin._id,
+        status: 'active',
+      });
+
+      await Task.create({
+        title: 'Comment on Featured Tech & AI Growth Post',
+        description: 'Leave 2-3 constructive and engaging comments on the designated Facebook discussion post to drive viral discussions.',
+        taskType: 'comment_post',
+        category: 'Viral Commenting',
+        rewardPoints: 40,
+        targetUrl: 'https://facebook.com/groups/growthhackers/posts/991823712',
+        instructions: 'Read the post topic, write a positive comment sharing thoughts on AI automation, and capture screenshot proof.',
+        isBroadcast: true,
+        screenshotRequired: true,
+        profileLinkRequired: true,
+        createdBy: admin._id,
+        status: 'active',
+      });
+
+      await Task.create({
+        title: 'Share Daily Motivational Story / Reel',
+        description: 'Publish an inspiring story or reel to your Facebook profile story to maintain account visibility and active status.',
+        taskType: 'story_post',
+        category: 'Story Marketing',
+        rewardPoints: 60,
+        instructions: 'Upload an engaging story with motivational quote/image and take screenshot of your story view.',
+        isBroadcast: true,
+        screenshotRequired: true,
+        profileLinkRequired: false,
+        createdBy: admin._id,
+        status: 'active',
+      });
+
+      console.log('[Seeder] Created 3 Broadcast Tasks including Create Facebook Account task.');
+    }
+
     console.log('[Seeder] Seeding check completed.');
   } catch (error) {
     console.error('[Seeder] Error during seed:', error);
