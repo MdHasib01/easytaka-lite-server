@@ -22,6 +22,30 @@ const systemSettingSchema = new mongoose.Schema(
       default: 50,
       min: 0,
     },
+    minWithdrawalPoints: {
+      type: Number,
+      default: 50,
+      min: 1,
+    },
+    maxWithdrawalPoints: {
+      type: Number,
+      default: 1000,
+      min: 1,
+    },
+    withdrawalCycleDays: {
+      type: Number,
+      default: 7,
+      min: 1,
+    },
+    pointToBdtRate: {
+      type: Number,
+      default: 1,
+      min: 0.01,
+    },
+    withdrawalEnabled: {
+      type: Boolean,
+      default: true,
+    },
   },
   { timestamps: true }
 );
@@ -35,6 +59,11 @@ systemSettingSchema.statics.getSettings = async function () {
       facebookMilestoneReward: 100,
       facebookMilestoneStep: 5,
       defaultDailyCompletionReward: 50,
+      minWithdrawalPoints: 50,
+      maxWithdrawalPoints: 1000,
+      withdrawalCycleDays: 7,
+      pointToBdtRate: 1,
+      withdrawalEnabled: true,
     });
   }
   return settings;

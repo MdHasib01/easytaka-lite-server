@@ -132,6 +132,7 @@ app.use('/api/daily-tasks', require('./routes/dailyTaskManagerRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
 app.use('/api/stats', require('./routes/statsRoutes'));
 app.use('/api/settings', require('./routes/settingsRoutes'));
+app.use('/api/withdrawals', require('./routes/withdrawalRoutes'));
 app.use('/api/upload', require('./routes/uploadRoutes'));
 
 // Health Check
@@ -141,7 +142,8 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     service: 'EsyTaka Lite - Facebook Media & Task Manager Backend',
     websocket: 'enabled',
-    productionDomain: 'liteapi.easytaka.com',
+    productionDomain: 'lite.easytaka.com',
+    productionApi: 'lite.easytaka.com/api',
     clientDomain: 'lite.easytaka.com',
     cors: 'active',
   });
@@ -199,7 +201,7 @@ httpServer.listen(PORT, () => {
   console.log(`🚀 EsyTaka Lite Server running on http://localhost:${PORT}`);
   console.log(`📡 WebSocket Gateway: Active on ws://localhost:${PORT}`);
   console.log(`🌐 Production Client: https://lite.easytaka.com`);
-  console.log(`🌐 Production API: https://liteapi.easytaka.com`);
+  console.log(`🌐 Production API: https://lite.easytaka.com/api`);
   console.log(`📡 MongoDB URI: ${process.env.MONGODB_URI ? 'Configured' : 'Missing'}`);
   console.log(`☁️ Cloudinary: ${process.env.CLOUDINARY_CLOUD_NAME || 'bmiez0ep'}`);
   console.log(`===================================================`);

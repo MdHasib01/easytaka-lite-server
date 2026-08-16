@@ -22,6 +22,11 @@ exports.updateSettings = async (req, res) => {
       facebookMilestoneReward,
       facebookMilestoneStep,
       defaultDailyCompletionReward,
+      minWithdrawalPoints,
+      maxWithdrawalPoints,
+      withdrawalCycleDays,
+      pointToBdtRate,
+      withdrawalEnabled,
     } = req.body;
 
     let settings = await SystemSetting.getSettings();
@@ -37,6 +42,21 @@ exports.updateSettings = async (req, res) => {
     }
     if (defaultDailyCompletionReward !== undefined) {
       settings.defaultDailyCompletionReward = Math.max(0, Number(defaultDailyCompletionReward));
+    }
+    if (minWithdrawalPoints !== undefined) {
+      settings.minWithdrawalPoints = Math.max(1, Number(minWithdrawalPoints));
+    }
+    if (maxWithdrawalPoints !== undefined) {
+      settings.maxWithdrawalPoints = Math.max(1, Number(maxWithdrawalPoints));
+    }
+    if (withdrawalCycleDays !== undefined) {
+      settings.withdrawalCycleDays = Math.max(1, Number(withdrawalCycleDays));
+    }
+    if (pointToBdtRate !== undefined) {
+      settings.pointToBdtRate = Math.max(0.01, Number(pointToBdtRate));
+    }
+    if (withdrawalEnabled !== undefined) {
+      settings.withdrawalEnabled = Boolean(withdrawalEnabled);
     }
 
     await settings.save();

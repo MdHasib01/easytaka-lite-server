@@ -21,6 +21,8 @@ const pointTransactionSchema = new mongoose.Schema(
         'manual_adjustment',
         'account_reward',
         'milestone_bonus',
+        'withdrawal',
+        'withdrawal_refund',
       ],
       default: 'task_reward',
     },

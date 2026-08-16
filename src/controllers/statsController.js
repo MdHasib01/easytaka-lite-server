@@ -4,6 +4,7 @@ const TaskSubmission = require('../models/TaskSubmission');
 const FacebookAccount = require('../models/FacebookAccount');
 const PointTransaction = require('../models/PointTransaction');
 const DailyRoutine = require('../models/DailyRoutine');
+const Withdrawal = require('../models/Withdrawal');
 
 const getTodayString = () => new Date().toISOString().split('T')[0];
 
@@ -19,6 +20,7 @@ exports.getDashboardStats = async (req, res) => {
         pendingTaskVerifications,
         pendingAccountVerifications,
         pendingSmmVerifications,
+        pendingWithdrawals,
         totalAccounts,
         recentSubmissions,
       ] = await Promise.all([
@@ -28,6 +30,7 @@ exports.getDashboardStats = async (req, res) => {
         TaskSubmission.countDocuments({ status: 'pending' }),
         FacebookAccount.countDocuments({ approvalStatus: 'pending', isActive: true }),
         User.countDocuments({ role: 'smm', status: 'pending_verification' }),
+        Withdrawal.countDocuments({ status: 'pending' }),
         FacebookAccount.countDocuments({ isActive: true }),
         TaskSubmission.find()
           .sort({ createdAt: -1 })
@@ -39,11 +42,19 @@ exports.getDashboardStats = async (req, res) => {
       const pendingVerifications = pendingTaskVerifications + pendingAccountVerifications + pendingSmmVerifications;
 
       // Total points awarded
-      const pointAggregation = await PointTransaction.aggregate([
-        { $match: { amount: { $gt: 0 } } },
-        { $group: { _id: null, total: { $sum: '$amount' } } },
+      const [pointAggregation, paidWithdrawalAggregation] = await Promise.all([
+        PointTransaction.aggregate([
+          { $match: { amount: { $gt: 0 } } },
+          { $group: { _id: null, total: { $sum: '$amount' } } },
+        ]),
+        Withdrawal.aggregate([
+          { $match: { status: 'paid' } },
+          { $group: { _id: null, totalBDT: { $sum: '$amountBDT' } } },
+        ]),
       ]);
+
       const totalPointsAwarded = pointAggregation[0]?.total || 0;
+      const totalPaidWithdrawalsBDT = paidWithdrawalAggregation[0]?.totalBDT || 0;
 
       return res.json({
         success: true,
@@ -55,8 +66,10 @@ exports.getDashboardStats = async (req, res) => {
           pendingTaskVerifications,
           pendingAccountVerifications,
           pendingSmmVerifications,
+          pendingWithdrawals,
           totalAccounts,
           totalPointsAwarded,
+          totalPaidWithdrawalsBDT,
         },
         recentSubmissions,
       });
@@ -69,6 +82,7 @@ exports.getDashboardStats = async (req, res) => {
         myPendingSubmissions,
         myApprovedSubmissions,
         myRejectedSubmissions,
+        myPendingWithdrawals,
         todayRoutines,
         recentTransactions,
       ] = await Promise.all([
@@ -76,6 +90,7 @@ exports.getDashboardStats = async (req, res) => {
         TaskSubmission.countDocuments({ smmId, status: 'pending' }),
         TaskSubmission.countDocuments({ smmId, status: 'approved' }),
         TaskSubmission.countDocuments({ smmId, status: 'rejected' }),
+        Withdrawal.countDocuments({ userId: smmId, status: 'pending' }),
         DailyRoutine.find({ smmId, date: today }),
         PointTransaction.find({ userId: smmId }).sort({ createdAt: -1 }).limit(5),
       ]);
@@ -93,6 +108,7 @@ exports.getDashboardStats = async (req, res) => {
           pendingSubmissions: myPendingSubmissions,
           approvedSubmissions: myApprovedSubmissions,
           rejectedSubmissions: myRejectedSubmissions,
+          pendingWithdrawals: myPendingWithdrawals,
           streakDays: req.user.streakDays || 0,
         },
         recentTransactions,
