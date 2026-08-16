@@ -9,6 +9,8 @@ const { initializeSocket } = require('./socket');
 
 // Initialize Express app
 const app = express();
+app.set('trust proxy', 1);
+
 const httpServer = http.createServer(app);
 
 // Initialize WebSocket with HTTP server
@@ -20,38 +22,38 @@ connectDB().then(() => {
 });
 
 // Production-ready origin resolver
+const allowedOriginsList = [
+  'https://lite.easytaka.com',
+  'http://lite.easytaka.com',
+  'https://www.lite.easytaka.com',
+  'https://easytaka.com',
+  'https://www.easytaka.com',
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5173',
+  'http://localhost:5000',
+  'http://127.0.0.1:5000',
+];
+
+if (process.env.CLIENT_URL) {
+  allowedOriginsList.push(process.env.CLIENT_URL.trim());
+}
+
+if (process.env.ALLOWED_ORIGINS) {
+  process.env.ALLOWED_ORIGINS.split(',').forEach((o) => {
+    if (o.trim()) allowedOriginsList.push(o.trim());
+  });
+}
+
 const isOriginAllowed = (origin) => {
-  if (!origin) return true; // Allow curl, mobile apps, server-to-server, Postman
+  if (!origin) return true; // allow curl, server-to-server, mobile
 
-  const allowed = [
-    'https://lite.easytaka.com',
-    'http://lite.easytaka.com',
-    'https://www.lite.easytaka.com',
-    'https://easytaka.com',
-    'https://www.easytaka.com',
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:5173',
-    'http://localhost:5000',
-    'http://127.0.0.1:5000',
-  ];
-
-  if (process.env.CLIENT_URL) {
-    allowed.push(process.env.CLIENT_URL.trim());
-  }
-
-  if (process.env.ALLOWED_ORIGINS) {
-    process.env.ALLOWED_ORIGINS.split(',').forEach((o) => {
-      if (o.trim()) allowed.push(o.trim());
-    });
-  }
-
-  if (allowed.includes(origin) || allowed.includes('*')) {
+  if (allowedOriginsList.includes(origin) || allowedOriginsList.includes('*')) {
     return true;
   }
 
-  // Regex pattern matching for any easytaka.com subdomain or localhost
+  // Allow all easytaka.com subdomains and localhost ports
   const easytakaDomainRegex = /^https?:\/\/([a-zA-Z0-9-]+\.)*easytaka\.com(:\d+)?$/;
   const localhostRegex = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
 
@@ -59,49 +61,61 @@ const isOriginAllowed = (origin) => {
     return true;
   }
 
-  return true; // Permissive fallback so production requests are never blocked
+  return true; // Safe fallback so API is accessible
 };
 
-const corsOptions = {
-  origin: (origin, callback) => {
-    callback(null, isOriginAllowed(origin));
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'X-Requested-With',
-    'Accept',
-    'Origin',
-    'x-access-token',
-  ],
-  exposedHeaders: ['Set-Cookie'],
-  maxAge: 86400, // 24 hours preflight cache
-};
-
-// Apply CORS middleware
-app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Handle all OPTIONS preflight requests
-
-// Fallback manual CORS header injection to guarantee browser acceptance
+// 1. Direct CORS & Preflight Middleware (executes first for all requests)
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (isOriginAllowed(origin)) {
+
+  if (origin && isOriginAllowed(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  } else {
     res.setHeader('Access-Control-Allow-Origin', origin || '*');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD');
-    res.setHeader(
-      'Access-Control-Allow-Headers',
-      'Content-Type, Authorization, X-Requested-With, Accept, Origin, x-access-token'
-    );
   }
 
+  res.setHeader('Vary', 'Origin');
+  res.setHeader(
+    'Access-Control-Allow-Methods',
+    'GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD'
+  );
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-access-token, cache-control, Pragma'
+  );
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Type, Authorization');
+  res.setHeader('Access-Control-Max-Age', '86400');
+
+  // Fast-return for HTTP OPTIONS preflight
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
   }
+
   next();
 });
+
+// 2. Standard CORS middleware as additional layer
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      callback(null, origin || true);
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+    allowedHeaders: [
+      'Origin',
+      'X-Requested-With',
+      'Content-Type',
+      'Accept',
+      'Authorization',
+      'x-access-token',
+      'cache-control',
+      'Pragma',
+    ],
+  })
+);
 
 app.use(express.json({ limit: '20mb' }));
 app.use(express.urlencoded({ extended: true, limit: '20mb' }));
@@ -127,15 +141,15 @@ app.get('/api/health', (req, res) => {
     websocket: 'enabled',
     productionDomain: 'liteapi.easytaka.com',
     clientDomain: 'lite.easytaka.com',
-    cors: 'production-ready',
+    cors: 'active',
   });
 });
 
-// Global Error Handler with CORS headers preserved
+// Global Error Handler with CORS preservation
 app.use((err, req, res, next) => {
   const origin = req.headers.origin;
-  if (isOriginAllowed(origin)) {
-    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  if (origin) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
 
