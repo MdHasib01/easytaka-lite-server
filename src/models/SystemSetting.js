@@ -46,15 +46,41 @@ const systemSettingSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+    recoveryEmailConfig: {
+      address: { type: String, default: '' },
+      appPassword: { type: String, default: '' }, // encrypted at rest, see utils/encryption.js
+      imapHost: { type: String, default: 'imap.gmail.com' },
+      imapPort: { type: Number, default: 993 },
+      enabled: { type: Boolean, default: false },
+      pollIntervalSeconds: { type: Number, default: 60, min: 30 },
+      // Sender to watch for, e.g. "Facebook <notification@facebook.com>" or just the email address.
+      // When set, only mail from this sender is passed to the AI; otherwise falls back to a generic
+      // facebook/meta sender heuristic.
+      triggerSender: { type: String, default: '' },
+    },
+    aiConfig: {
+      provider: { type: String, enum: ['openai', 'gemini'], default: 'openai' },
+      model: { type: String, default: '' },
+      apiKey: { type: String, default: '' }, // encrypted at rest, see utils/encryption.js
+      enabled: { type: Boolean, default: false },
+    },
   },
   { timestamps: true }
 );
 
+// Fixed id for the singleton document. The `systemsettings` collection also contains
+// unrelated legacy documents (from a removed "Quality & Fraud" per-key settings
+// feature) that predate this model. A bare findOne() with no filter has no guaranteed
+// order and could return one of those instead of the real settings doc — pinning to a
+// fixed id makes lookups deterministic regardless of what else is in the collection.
+const SINGLETON_ID = new mongoose.Types.ObjectId('6a71abd403171022222d2391');
+
 // Singleton helper to get or create settings
 systemSettingSchema.statics.getSettings = async function () {
-  let settings = await this.findOne();
+  let settings = await this.findById(SINGLETON_ID);
   if (!settings) {
     settings = await this.create({
+      _id: SINGLETON_ID,
       facebookAccountReward: 40,
       facebookMilestoneReward: 100,
       facebookMilestoneStep: 5,

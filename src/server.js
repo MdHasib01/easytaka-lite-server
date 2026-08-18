@@ -8,6 +8,7 @@ const morgan = require('morgan');
 const connectDB = require('./config/db');
 const seedInitialData = require('./utils/seeder');
 const { initializeSocket } = require('./socket');
+const { startFacebookMailWatcher } = require('./services/facebookMailWatcherService');
 
 // Initialize Express app
 const app = express();
@@ -21,6 +22,7 @@ initializeSocket(httpServer);
 // Connect to MongoDB
 connectDB().then(() => {
   seedInitialData();
+  startFacebookMailWatcher();
 });
 
 // Production-ready origin resolver

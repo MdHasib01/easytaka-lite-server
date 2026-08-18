@@ -30,6 +30,7 @@ const notificationSchema = new mongoose.Schema(
         'withdrawal_paid',
         'withdrawal_rejected',
         'system_alert',
+        'facebook_otp_received',
       ],
       required: true,
     },

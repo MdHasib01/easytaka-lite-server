@@ -35,6 +35,10 @@ const facebookAccountSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    emailPassword: {
+      type: String,
+      default: '',
+    },
     twoFactorSecret: {
       type: String,
       default: '',

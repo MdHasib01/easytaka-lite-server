@@ -1,4 +1,21 @@
 const SystemSetting = require('../models/SystemSetting');
+const { encrypt } = require('../utils/encryption');
+
+// Masks secret fields before sending settings to the client.
+const maskSettings = (settingsDoc) => {
+  const settings = settingsDoc.toObject ? settingsDoc.toObject() : { ...settingsDoc };
+
+  if (settings.recoveryEmailConfig) {
+    const { appPassword, ...rest } = settings.recoveryEmailConfig;
+    settings.recoveryEmailConfig = { ...rest, appPasswordSet: Boolean(appPassword) };
+  }
+  if (settings.aiConfig) {
+    const { apiKey, ...rest } = settings.aiConfig;
+    settings.aiConfig = { ...rest, apiKeySet: Boolean(apiKey) };
+  }
+
+  return settings;
+};
 
 // Get global point and system settings
 exports.getSettings = async (req, res) => {
@@ -6,7 +23,7 @@ exports.getSettings = async (req, res) => {
     const settings = await SystemSetting.getSettings();
     return res.json({
       success: true,
-      settings,
+      settings: maskSettings(settings),
     });
   } catch (error) {
     console.error('Get settings error:', error);
@@ -27,6 +44,8 @@ exports.updateSettings = async (req, res) => {
       withdrawalCycleDays,
       pointToBdtRate,
       withdrawalEnabled,
+      recoveryEmailConfig,
+      aiConfig,
     } = req.body;
 
     let settings = await SystemSetting.getSettings();
@@ -59,12 +78,34 @@ exports.updateSettings = async (req, res) => {
       settings.withdrawalEnabled = Boolean(withdrawalEnabled);
     }
 
+    if (recoveryEmailConfig !== undefined) {
+      const { address, appPassword, imapHost, imapPort, enabled, pollIntervalSeconds, triggerSender } =
+        recoveryEmailConfig;
+      if (address !== undefined) settings.recoveryEmailConfig.address = String(address).trim();
+      if (appPassword) settings.recoveryEmailConfig.appPassword = encrypt(appPassword); // only overwrite on a real new value
+      if (imapHost !== undefined) settings.recoveryEmailConfig.imapHost = String(imapHost).trim() || 'imap.gmail.com';
+      if (imapPort !== undefined) settings.recoveryEmailConfig.imapPort = Number(imapPort) || 993;
+      if (enabled !== undefined) settings.recoveryEmailConfig.enabled = Boolean(enabled);
+      if (pollIntervalSeconds !== undefined) {
+        settings.recoveryEmailConfig.pollIntervalSeconds = Math.max(30, Number(pollIntervalSeconds));
+      }
+      if (triggerSender !== undefined) settings.recoveryEmailConfig.triggerSender = String(triggerSender).trim();
+    }
+
+    if (aiConfig !== undefined) {
+      const { provider, model, apiKey, enabled } = aiConfig;
+      if (provider !== undefined && ['openai', 'gemini'].includes(provider)) settings.aiConfig.provider = provider;
+      if (model !== undefined) settings.aiConfig.model = String(model).trim();
+      if (apiKey) settings.aiConfig.apiKey = encrypt(apiKey); // only overwrite on a real new value
+      if (enabled !== undefined) settings.aiConfig.enabled = Boolean(enabled);
+    }
+
     await settings.save();
 
     return res.json({
       success: true,
       message: 'System point settings updated successfully.',
-      settings,
+      settings: maskSettings(settings),
     });
   } catch (error) {
     console.error('Update settings error:', error);
