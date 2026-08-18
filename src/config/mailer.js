@@ -231,8 +231,76 @@ const sendAccountRejectedEmail = async (toEmail, name, reason) => {
   }
 };
 
+/**
+ * Send Temporary Password Email (Admin-triggered password reset)
+ */
+const sendTempPasswordEmail = async (toEmail, name, tempPassword, loginUrl) => {
+  try {
+    const transporter = createTransporter();
+    const mailOptions = {
+      from: defaultFrom,
+      to: toEmail,
+      subject: '🔑 Your EsyTaka Lite Password has been Reset',
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0b0f19; color: #e2e8f0; margin: 0; padding: 24px; }
+            .container { max-width: 600px; margin: 0 auto; background: #111827; border: 1px solid #1f2937; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
+            .header { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); padding: 28px 24px; text-align: center; color: white; }
+            .body { padding: 32px 28px; }
+            .pass-box { background: #0f172a; border: 1px dashed #4f46e5; border-radius: 12px; padding: 18px; margin: 20px 0; text-align: center; }
+            .pass-value { font-family: 'Courier New', monospace; font-size: 22px; font-weight: 800; letter-spacing: 2px; color: #a5b4fc; }
+            .btn-wrapper { text-align: center; margin: 28px 0; }
+            .btn { display: inline-block; background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #ffffff !important; text-decoration: none; font-weight: 700; font-size: 15px; padding: 14px 32px; border-radius: 12px; }
+            .warn { background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 12px; padding: 14px; margin-top: 20px; color: #fcd34d; font-size: 12px; }
+            .footer { background: #090d16; padding: 20px; text-align: center; font-size: 12px; color: #64748b; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 style="margin:0 0 8px 0; font-size: 22px;">Password Reset</h1>
+              <p style="margin:0; font-size:13px; opacity:0.9;">EsyTaka Lite Workspace</p>
+            </div>
+            <div class="body">
+              <h2 style="color: #f8fafc; font-size: 16px; margin-top:0;">Hello ${name || 'Agent'},</h2>
+              <p style="color: #94a3b8; font-size: 14px; line-height: 1.6;">
+                An administrator has reset your account password. Use the temporary password below to log in.
+              </p>
+              <div class="pass-box">
+                <span class="pass-value">${tempPassword}</span>
+              </div>
+              <div class="btn-wrapper">
+                <a href="${loginUrl}" target="_blank" class="btn">Log In Now &rarr;</a>
+              </div>
+              <div class="warn">
+                For security, you will be required to set a new password immediately after logging in with this temporary one.
+              </div>
+            </div>
+            <div class="footer">
+              &copy; ${new Date().getFullYear()} EsyTaka Lite. This email is intended solely for ${toEmail}.
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log('[Mailer] Temp password email sent:', info.messageId);
+    return { success: true, messageId: info.messageId };
+  } catch (error) {
+    console.error('[Mailer Error] Failed to send temp password email:', error);
+    return { success: false, error: error.message };
+  }
+};
+
 module.exports = {
   sendSmmInvitationEmail,
   sendAccountApprovedEmail,
   sendAccountRejectedEmail,
+  sendTempPasswordEmail,
 };

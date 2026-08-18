@@ -1,11 +1,17 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const FacebookAccount = require('../models/FacebookAccount');
+const DailyRoutine = require('../models/DailyRoutine');
 const {
   sendSmmInvitationEmail,
   sendAccountApprovedEmail,
   sendAccountRejectedEmail,
+  sendTempPasswordEmail,
 } = require('../config/mailer');
+
+// Generates a random alphanumeric temporary password, e.g. "Tk9f2ac71b"
+const generateTempPassword = () => `Tk${crypto.randomBytes(4).toString('hex')}`;
 
 const generateToken = (user) => {
   return jwt.sign(
@@ -271,6 +277,8 @@ exports.login = async (req, res) => {
         avatar: user.avatar,
         phone: user.phone,
         streakDays: user.streakDays,
+        isActive: user.isActive,
+        requirePasswordChange: user.requirePasswordChange,
       },
     });
   } catch (error) {
@@ -297,9 +305,36 @@ exports.getMe = async (req, res) => {
         phone: user.phone,
         streakDays: user.streakDays,
         createdAt: user.createdAt,
+        isActive: user.isActive,
+        requirePasswordChange: user.requirePasswordChange,
       },
     });
   } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// SMM sets a new password after logging in with a temp (admin-reset) password
+exports.setNewPassword = async (req, res) => {
+  try {
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ success: false, message: 'New password must be at least 6 characters.' });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found.' });
+    }
+
+    user.password = newPassword; // Hashed by pre-save hook
+    user.requirePasswordChange = false;
+    await user.save();
+
+    return res.json({ success: true, message: 'Password updated successfully.' });
+  } catch (error) {
+    console.error('Set new password error:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -502,6 +537,97 @@ exports.updateSmmDailyReward = async (req, res) => {
     });
   } catch (error) {
     console.error('Update SMM daily reward error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Admin grants or revokes an SMM's access to the account (login & API access)
+exports.toggleSmmAccess = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isActive } = req.body;
+
+    if (typeof isActive !== 'boolean') {
+      return res.status(400).json({ success: false, message: 'Please provide isActive as true or false.' });
+    }
+
+    const smm = await User.findOne({ _id: id, role: 'smm' });
+    if (!smm) {
+      return res.status(404).json({ success: false, message: 'SMM User not found.' });
+    }
+
+    smm.isActive = isActive;
+    await smm.save();
+
+    return res.json({
+      success: true,
+      message: isActive
+        ? `Access restored for ${smm.name || smm.email}.`
+        : `Access revoked for ${smm.name || smm.email}. They can no longer log in until access is restored.`,
+      smm: { id: smm._id, name: smm.name, email: smm.email, isActive: smm.isActive },
+    });
+  } catch (error) {
+    console.error('Toggle SMM access error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Admin resets an SMM's password to a temp password and emails it to them
+exports.resetSmmPassword = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const smm = await User.findOne({ _id: id, role: 'smm' });
+    if (!smm) {
+      return res.status(404).json({ success: false, message: 'SMM User not found.' });
+    }
+
+    const tempPassword = generateTempPassword();
+    smm.password = tempPassword; // Hashed by pre-save hook
+    smm.requirePasswordChange = true;
+    await smm.save();
+
+    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+    const loginUrl = `${clientUrl}/login`;
+
+    const mailResult = await sendTempPasswordEmail(smm.email, smm.name, tempPassword, loginUrl);
+    if (!mailResult.success) {
+      return res.status(502).json({
+        success: false,
+        message: `Password was reset, but the notification email failed to send: ${mailResult.error}`,
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: `A temporary password was emailed to ${smm.email}. They will be required to set a new password on next login.`,
+    });
+  } catch (error) {
+    console.error('Reset SMM password error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Admin permanently deletes an SMM account and their Facebook accounts / daily routines
+exports.deleteSMM = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const smm = await User.findOne({ _id: id, role: 'smm' });
+    if (!smm) {
+      return res.status(404).json({ success: false, message: 'SMM User not found.' });
+    }
+
+    await FacebookAccount.deleteMany({ smmId: id });
+    await DailyRoutine.deleteMany({ smmId: id });
+    await smm.deleteOne();
+
+    return res.json({
+      success: true,
+      message: `${smm.name || smm.email} and their Facebook accounts have been permanently deleted.`,
+    });
+  } catch (error) {
+    console.error('Delete SMM error:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };

@@ -11,6 +11,7 @@ router.post('/complete-onboarding', authController.completeSmmOnboarding);
 // Protected User Routes
 router.get('/me', verifyToken, authController.getMe);
 router.put('/profile', verifyToken, authController.updateProfile);
+router.put('/set-new-password', verifyToken, authController.setNewPassword);
 
 // Admin-Only SMM Management & Verification Routes
 router.post('/invite-smm', verifyToken, isAdmin, authController.inviteSMM);
@@ -19,5 +20,8 @@ router.post('/verify-smm/:id', verifyToken, isAdmin, authController.verifySmm);
 router.post('/resend-invite/:id', verifyToken, isAdmin, authController.resendInvitation);
 router.get('/smms', verifyToken, isAdmin, authController.listSMMs);
 router.put('/smms/:id/daily-reward', verifyToken, isAdmin, authController.updateSmmDailyReward);
+router.put('/smms/:id/access', verifyToken, isAdmin, authController.toggleSmmAccess);
+router.post('/smms/:id/reset-password', verifyToken, isAdmin, authController.resetSmmPassword);
+router.delete('/smms/:id', verifyToken, isAdmin, authController.deleteSMM);
 
 module.exports = router;
