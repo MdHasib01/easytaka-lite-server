@@ -32,6 +32,16 @@ exports.createAccount = async (req, res) => {
       notes,
       routineTargets,
       assignedTo,
+      // SMM Mode & Persona fields
+      accountMode,
+      assignedProduct,
+      workloadTier,
+      childAge,
+      purchaseDate,
+      purchaseHistory,
+      writingStyle,
+      personaBio,
+      customGuideline,
     } = req.body;
 
     if (!accountName || !profileUrl) {
@@ -43,6 +53,12 @@ exports.createAccount = async (req, res) => {
 
     // Determine assignee (defaults to assignedTo if provided, otherwise the user creating it)
     const targetAssigneeId = assignedTo || req.user._id;
+
+    // SMM Account Mode and Workload settings are strictly controlled by Admin
+    const finalAccountMode = isAdmin ? (accountMode || 'general') : 'general';
+    const finalAssignedProduct = isAdmin ? (assignedProduct || 'none') : 'none';
+    const finalWorkloadTier = isAdmin ? (workloadTier || 'active') : 'active';
+    const finalCustomGuideline = isAdmin ? (customGuideline || '') : '';
 
     const account = await FacebookAccount.create({
       smmId: targetAssigneeId,
@@ -67,6 +83,15 @@ exports.createAccount = async (req, res) => {
       accountCategory: accountCategory || 'Personal / Engagement',
       targetRegion: targetRegion || 'Global',
       notes: notes || '',
+      accountMode: finalAccountMode,
+      assignedProduct: finalAssignedProduct,
+      workloadTier: finalWorkloadTier,
+      childAge: childAge || '',
+      purchaseDate: purchaseDate || '',
+      purchaseHistory: purchaseHistory || '',
+      writingStyle: writingStyle || 'Bangla (বাঙালি মা টোন)',
+      personaBio: personaBio || '',
+      customGuideline: finalCustomGuideline,
       routineTargets: routineTargets || {
         feedComments: 5,
         communityReplies: 3,
@@ -199,6 +224,18 @@ exports.updateAccount = async (req, res) => {
 
     const updates = { ...req.body };
 
+    // SMM users CANNOT change mode, product line, workload tier, or approval attributes
+    if (req.user.role !== 'admin') {
+      delete updates.accountMode;
+      delete updates.assignedProduct;
+      delete updates.workloadTier;
+      delete updates.customGuideline;
+      delete updates.approvalStatus;
+      delete updates.approvedBy;
+      delete updates.approvedAt;
+      delete updates.pointsAwarded;
+    }
+
     // If assignedTo is explicitly modified
     if (updates.assignedTo && updates.assignedTo !== (account.assignedTo?.toString() || account.smmId?.toString())) {
       updates.smmId = updates.assignedTo;
@@ -310,6 +347,18 @@ exports.verifyAccount = async (req, res) => {
     const settings = await SystemSetting.getSettings();
 
     if (action === 'approve') {
+      const {
+        accountMode,
+        assignedProduct,
+        workloadTier,
+        childAge,
+        purchaseDate,
+        purchaseHistory,
+        writingStyle,
+        personaBio,
+        customGuideline,
+      } = req.body;
+
       const basePoints = customPoints !== undefined && customPoints !== null
         ? Number(customPoints)
         : (settings.facebookAccountReward || 40);
@@ -368,6 +417,18 @@ exports.verifyAccount = async (req, res) => {
       account.adminNote = adminNote || 'Approved by Admin';
       account.pointsAwarded = basePoints;
       account.status = account.status === 'banned' ? 'banned' : 'active';
+
+      // Admin can configure mode, product, and persona on approval
+      if (accountMode) account.accountMode = accountMode;
+      if (assignedProduct) account.assignedProduct = assignedProduct;
+      if (workloadTier) account.workloadTier = workloadTier;
+      if (childAge !== undefined) account.childAge = childAge;
+      if (purchaseDate !== undefined) account.purchaseDate = purchaseDate;
+      if (purchaseHistory !== undefined) account.purchaseHistory = purchaseHistory;
+      if (writingStyle !== undefined) account.writingStyle = writingStyle;
+      if (personaBio !== undefined) account.personaBio = personaBio;
+      if (customGuideline !== undefined) account.customGuideline = customGuideline;
+
       await account.save();
 
       // Emit real-time notification to SMM

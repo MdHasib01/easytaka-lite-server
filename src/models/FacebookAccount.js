@@ -91,6 +91,49 @@ const facebookAccountSchema = new mongoose.Schema(
       type: String,
       default: '',
     },
+    // SMM Multi-Persona Role & Mode (Admin Controlled)
+    accountMode: {
+      type: String,
+      enum: ['reviewer', 'question', 'support', 'navigation', 'general'],
+      default: 'general',
+    },
+    // Assigned Product Focus
+    assignedProduct: {
+      type: String,
+      enum: ['milkimom', 'milkready', 'smoothflow', 'stableflow', 'all_products', 'none'],
+      default: 'none',
+    },
+    // Workload Tier (Active 12, Light 4, Rest 4 in 20-day rotation)
+    workloadTier: {
+      type: String,
+      enum: ['active', 'light', 'rest'],
+      default: 'active',
+    },
+    // Persona Profile Characteristics (SMM Guideline consistency)
+    childAge: {
+      type: String,
+      default: '',
+    },
+    purchaseDate: {
+      type: String,
+      default: '',
+    },
+    purchaseHistory: {
+      type: String,
+      default: '',
+    },
+    writingStyle: {
+      type: String,
+      default: 'Bangla (বাঙালি মা টোন)',
+    },
+    personaBio: {
+      type: String,
+      default: '',
+    },
+    customGuideline: {
+      type: String,
+      default: '',
+    },
     // Fixed daily routine tasks targets for this account
     routineTargets: {
       feedComments: { type: Number, default: 5 },
