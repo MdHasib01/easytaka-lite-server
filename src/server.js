@@ -6,7 +6,6 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const connectDB = require('./config/db');
-const seedInitialData = require('./utils/seeder');
 const { initializeSocket } = require('./socket');
 const { startFacebookMailWatcher } = require('./services/facebookMailWatcherService');
 
@@ -21,7 +20,6 @@ initializeSocket(httpServer);
 
 // Connect to MongoDB
 connectDB().then(() => {
-  seedInitialData();
   startFacebookMailWatcher();
 });
 

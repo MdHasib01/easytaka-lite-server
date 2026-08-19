@@ -4,6 +4,15 @@ const PointTransaction = require('../models/PointTransaction');
 const SystemSetting = require('../models/SystemSetting');
 const { sendNotificationToUser, sendNotificationToRole } = require('../socket');
 
+const populateAccountQuery = (query) => {
+  return query
+    .populate('smmId', 'name email avatar rewardPoints phone role')
+    .populate('createdBy', 'name email avatar role')
+    .populate('assignedTo', 'name email avatar role')
+    .populate('assignedBy', 'name email')
+    .populate('approvedBy', 'name email');
+};
+
 // Create a new Facebook account record (SMM or Admin)
 exports.createAccount = async (req, res) => {
   try {
@@ -22,6 +31,7 @@ exports.createAccount = async (req, res) => {
       targetRegion,
       notes,
       routineTargets,
+      assignedTo,
     } = req.body;
 
     if (!accountName || !profileUrl) {
@@ -31,8 +41,15 @@ exports.createAccount = async (req, res) => {
     const isAdmin = req.user.role === 'admin';
     const settings = await SystemSetting.getSettings();
 
+    // Determine assignee (defaults to assignedTo if provided, otherwise the user creating it)
+    const targetAssigneeId = assignedTo || req.user._id;
+
     const account = await FacebookAccount.create({
-      smmId: req.user._id,
+      smmId: targetAssigneeId,
+      createdBy: req.user._id,
+      assignedTo: targetAssigneeId,
+      assignedAt: assignedTo ? new Date() : null,
+      assignedBy: assignedTo && assignedTo.toString() !== req.user._id.toString() ? req.user._id : null,
       accountName,
       profileUrl,
       profileUid: profileUid || '',
@@ -66,14 +83,24 @@ exports.createAccount = async (req, res) => {
         message: `${req.user.name} submitted "${accountName}" for verification.`,
         link: '/verifications',
       });
+    } else if (assignedTo && assignedTo.toString() !== req.user._id.toString()) {
+      // Admin created and assigned to another SMM
+      sendNotificationToUser(assignedTo, {
+        type: 'new_account',
+        title: '👤 Facebook Account Assigned',
+        message: `${req.user.name} created and assigned Facebook profile "${accountName}" to you.`,
+        link: '/accounts',
+      });
     }
+
+    const populatedAccount = await populateAccountQuery(FacebookAccount.findById(account._id));
 
     return res.status(201).json({
       success: true,
       message: isAdmin
         ? 'Facebook account added successfully.'
         : `Facebook account submitted for verification! You will receive +${settings.facebookAccountReward || 40} PTS upon admin approval.`,
-      account,
+      account: populatedAccount || account,
     });
   } catch (error) {
     console.error('Create FB Account error:', error);
@@ -84,8 +111,12 @@ exports.createAccount = async (req, res) => {
 // Get all Facebook accounts for current logged-in SMM
 exports.getMyAccounts = async (req, res) => {
   try {
-    const accounts = await FacebookAccount.find({ smmId: req.user._id, isActive: true })
-      .sort({ createdAt: -1 });
+    const accounts = await populateAccountQuery(
+      FacebookAccount.find({
+        $or: [{ smmId: req.user._id }, { assignedTo: req.user._id }, { createdBy: req.user._id }],
+        isActive: true,
+      }).sort({ createdAt: -1 })
+    );
 
     return res.json({ success: true, count: accounts.length, accounts });
   } catch (error) {
@@ -96,7 +127,7 @@ exports.getMyAccounts = async (req, res) => {
 // Get all Facebook accounts across the system (Admin only)
 exports.getAllAccounts = async (req, res) => {
   try {
-    const { approvalStatus, status, smmId } = req.query;
+    const { approvalStatus, status, smmId, assignedTo, createdBy } = req.query;
     let query = { isActive: true };
 
     if (approvalStatus && approvalStatus !== 'all') {
@@ -108,11 +139,16 @@ exports.getAllAccounts = async (req, res) => {
     if (smmId) {
       query.smmId = smmId;
     }
+    if (assignedTo) {
+      query.assignedTo = assignedTo;
+    }
+    if (createdBy) {
+      query.createdBy = createdBy;
+    }
 
-    const accounts = await FacebookAccount.find(query)
-      .populate('smmId', 'name email avatar rewardPoints')
-      .populate('approvedBy', 'name email')
-      .sort({ createdAt: -1 });
+    const accounts = await populateAccountQuery(
+      FacebookAccount.find(query).sort({ createdAt: -1 })
+    );
 
     return res.json({ success: true, count: accounts.length, accounts });
   } catch (error) {
@@ -123,16 +159,19 @@ exports.getAllAccounts = async (req, res) => {
 // Get single account details
 exports.getAccountById = async (req, res) => {
   try {
-    const account = await FacebookAccount.findById(req.params.id)
-      .populate('smmId', 'name email avatar')
-      .populate('approvedBy', 'name email');
+    const account = await populateAccountQuery(FacebookAccount.findById(req.params.id));
 
     if (!account) {
       return res.status(404).json({ success: false, message: 'Account not found.' });
     }
 
-    // Ensure SMM owns it or user is Admin
-    if (req.user.role !== 'admin' && account.smmId._id.toString() !== req.user._id.toString()) {
+    const isSmm =
+      (account.smmId && account.smmId._id?.toString() === req.user._id.toString()) ||
+      (account.assignedTo && account.assignedTo._id?.toString() === req.user._id.toString()) ||
+      (account.createdBy && account.createdBy._id?.toString() === req.user._id.toString());
+
+    // Ensure SMM owns/assigned or user is Admin
+    if (req.user.role !== 'admin' && !isSmm) {
       return res.status(403).json({ success: false, message: 'Access denied.' });
     }
 
@@ -150,12 +189,30 @@ exports.updateAccount = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Account not found.' });
     }
 
-    if (req.user.role !== 'admin' && account.smmId.toString() !== req.user._id.toString()) {
+    const isOwner = account.smmId && account.smmId.toString() === req.user._id.toString();
+    const isCreator = account.createdBy && account.createdBy.toString() === req.user._id.toString();
+    const isAssignee = account.assignedTo && account.assignedTo.toString() === req.user._id.toString();
+
+    if (req.user.role !== 'admin' && !isOwner && !isCreator && !isAssignee) {
       return res.status(403).json({ success: false, message: 'Access denied.' });
     }
 
-    const updates = req.body;
-    account = await FacebookAccount.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
+    const updates = { ...req.body };
+
+    // If assignedTo is explicitly modified
+    if (updates.assignedTo && updates.assignedTo !== (account.assignedTo?.toString() || account.smmId?.toString())) {
+      updates.smmId = updates.assignedTo;
+      updates.assignedAt = new Date();
+      updates.assignedBy = req.user._id;
+
+      if (!account.createdBy) {
+        updates.createdBy = account.smmId || req.user._id;
+      }
+    }
+
+    account = await populateAccountQuery(
+      FacebookAccount.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true })
+    );
 
     return res.json({
       success: true,
@@ -163,6 +220,69 @@ exports.updateAccount = async (req, res) => {
       account,
     });
   } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Assign / Reassign Facebook Account to an SMM
+exports.assignAccount = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { assignedTo } = req.body;
+
+    if (!assignedTo) {
+      return res.status(400).json({ success: false, message: 'Please select an SMM agent to assign.' });
+    }
+
+    const account = await FacebookAccount.findById(id);
+    if (!account) {
+      return res.status(404).json({ success: false, message: 'Facebook account not found.' });
+    }
+
+    const isCreator = account.createdBy && account.createdBy.toString() === req.user._id.toString();
+    const isOwner = account.smmId && account.smmId.toString() === req.user._id.toString();
+    if (req.user.role !== 'admin' && !isCreator && !isOwner) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Only Admins or Account Owner can reassign this account.',
+      });
+    }
+
+    const targetUser = await User.findById(assignedTo);
+    if (!targetUser) {
+      return res.status(404).json({ success: false, message: 'Target SMM user not found.' });
+    }
+
+    // Preserve original creator if not already recorded
+    if (!account.createdBy) {
+      account.createdBy = account.smmId || req.user._id;
+    }
+
+    account.assignedTo = targetUser._id;
+    account.smmId = targetUser._id;
+    account.assignedAt = new Date();
+    account.assignedBy = req.user._id;
+    await account.save();
+
+    // Send real-time notification to assigned user
+    if (targetUser._id.toString() !== req.user._id.toString()) {
+      sendNotificationToUser(targetUser._id, {
+        type: 'new_account',
+        title: '👤 Facebook Account Assigned',
+        message: `You have been assigned to manage Facebook profile "${account.accountName}".`,
+        link: '/accounts',
+      });
+    }
+
+    const populatedAccount = await populateAccountQuery(FacebookAccount.findById(account._id));
+
+    return res.json({
+      success: true,
+      message: `Facebook account "${account.accountName}" assigned to ${targetUser.name || targetUser.email}.`,
+      account: populatedAccount,
+    });
+  } catch (error) {
+    console.error('Assign Account error:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -269,12 +389,14 @@ exports.verifyAccount = async (req, res) => {
         });
       }
 
+      const populatedAccount = await populateAccountQuery(FacebookAccount.findById(account._id));
+
       return res.json({
         success: true,
         message: milestoneAwarded
           ? `Account approved! Awarded ${basePoints} PTS + 🎁 ${milestoneBonusAmount} PTS Milestone Bonus (${totalApprovedCount}th account)!`
           : `Account approved! ${basePoints} PTS awarded to ${smmUser.name}.`,
-        account,
+        account: populatedAccount || account,
         pointsAwarded: basePoints,
         milestoneAwarded,
         milestoneBonusAmount,
@@ -302,10 +424,12 @@ exports.verifyAccount = async (req, res) => {
         link: '/accounts',
       });
 
+      const populatedAccount = await populateAccountQuery(FacebookAccount.findById(account._id));
+
       return res.json({
         success: true,
         message: 'Facebook account rejected with feedback note.',
-        account,
+        account: populatedAccount || account,
       });
     }
   } catch (error) {
