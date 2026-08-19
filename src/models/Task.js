@@ -13,8 +13,18 @@ const taskSchema = new mongoose.Schema(
     },
     taskType: {
       type: String,
-      enum: ['create_account', 'comment_post', 'community_reply', 'group_join', 'story_post', 'custom'],
+      enum: ['reviewer', 'question', 'support', 'navigation', 'create_account', 'comment_post', 'community_reply', 'group_join', 'story_post', 'custom'],
       default: 'custom',
+    },
+    targetMode: {
+      type: String,
+      enum: ['all', 'reviewer', 'question', 'support', 'navigation'],
+      default: 'all',
+    },
+    targetProduct: {
+      type: String,
+      enum: ['all', 'milkimom', 'milkready', 'smoothflow', 'stableflow', 'all_products'],
+      default: 'all',
     },
     category: {
       type: String,
@@ -22,9 +32,8 @@ const taskSchema = new mongoose.Schema(
     },
     rewardPoints: {
       type: Number,
-      required: true,
-      default: 50,
-      min: 1,
+      default: 0,
+      min: 0,
     },
     targetUrl: {
       type: String,

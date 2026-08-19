@@ -12,6 +12,8 @@ exports.createTask = async (req, res) => {
       title,
       description,
       taskType,
+      targetMode,
+      targetProduct,
       category,
       rewardPoints,
       targetUrl,
@@ -31,8 +33,10 @@ exports.createTask = async (req, res) => {
       title,
       description,
       taskType: taskType || 'custom',
+      targetMode: targetMode || 'all',
+      targetProduct: targetProduct || 'all',
       category: category || 'Facebook Engagement',
-      rewardPoints: Number(rewardPoints) || 50,
+      rewardPoints: Number(rewardPoints) || 0,
       targetUrl: targetUrl || '',
       instructions: instructions || '',
       assignedTo: isBroadcast ? null : (assignedTo || null),
@@ -49,17 +53,15 @@ exports.createTask = async (req, res) => {
       sendNotificationToRole('smm', {
         type: 'new_task',
         title: '⚡ New Facebook Task Available',
-        message: `"${task.title}" (+${task.rewardPoints} PTS) is now open for submissions.`,
+        message: `New task published: "${task.title}".`,
         link: '/tasks?tab=available',
-        points: task.rewardPoints,
       });
     } else if (assignedTo) {
       sendNotificationToUser(assignedTo, {
         type: 'new_task',
         title: '⚡ Direct Task Assigned',
-        message: `You were assigned "${task.title}" (+${task.rewardPoints} PTS).`,
+        message: `You were assigned task: "${task.title}".`,
         link: '/tasks?tab=available',
-        points: task.rewardPoints,
       });
     }
 
@@ -77,13 +79,21 @@ exports.createTask = async (req, res) => {
 // Get all tasks (Available for SMM, All for Admin)
 exports.getTasks = async (req, res) => {
   try {
-    const { status, type } = req.query;
+    const { status, type, mode, product } = req.query;
     let query = {};
 
     if (status) query.status = status;
     else if (req.user.role !== 'admin') query.status = 'active';
 
     if (type) query.taskType = type;
+
+    if (mode && mode !== 'all') {
+      query.targetMode = { $in: ['all', mode] };
+    }
+
+    if (product && product !== 'all') {
+      query.targetProduct = { $in: ['all', product] };
+    }
 
     // If SMM, show broadcast tasks OR tasks explicitly assigned to them
     if (req.user.role !== 'admin') {
