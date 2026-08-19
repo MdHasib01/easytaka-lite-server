@@ -299,6 +299,32 @@ exports.assignAccount = async (req, res) => {
     account.smmId = targetUser._id;
     account.assignedAt = new Date();
     account.assignedBy = req.user._id;
+
+    // If Admin provides mode/persona updates during assignment
+    if (req.user.role === 'admin') {
+      const {
+        accountMode,
+        assignedProduct,
+        workloadTier,
+        childAge,
+        purchaseDate,
+        purchaseHistory,
+        writingStyle,
+        personaBio,
+        customGuideline,
+      } = req.body;
+
+      if (accountMode !== undefined) account.accountMode = accountMode;
+      if (assignedProduct !== undefined) account.assignedProduct = assignedProduct;
+      if (workloadTier !== undefined) account.workloadTier = workloadTier;
+      if (childAge !== undefined) account.childAge = childAge;
+      if (purchaseDate !== undefined) account.purchaseDate = purchaseDate;
+      if (purchaseHistory !== undefined) account.purchaseHistory = purchaseHistory;
+      if (writingStyle !== undefined) account.writingStyle = writingStyle;
+      if (personaBio !== undefined) account.personaBio = personaBio;
+      if (customGuideline !== undefined) account.customGuideline = customGuideline;
+    }
+
     await account.save();
 
     // Send real-time notification to assigned user
