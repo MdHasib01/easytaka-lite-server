@@ -15,50 +15,31 @@ const getTodayString = () => {
 
 // Calculate percentage for a daily routine doc including standard targets and dynamic tasks
 const computePercentage = (routine, account) => {
-  const targets = account.routineTargets || {
-    feedComments: 5,
-    communityReplies: 3,
-    storyPost: true,
-    groupShare: 2,
-    feedScrollMinutes: 10,
-  };
-
   let totalWeight = 0;
   let earnedWeight = 0;
 
-  // 1. Comments (weight 25)
-  if (targets.feedComments > 0) {
-    totalWeight += 25;
-    const ratio = Math.min(1, (routine.items.commentsCount || 0) / targets.feedComments);
-    earnedWeight += ratio * 25;
-  }
+  // 1. Upload profile picture (weight 20)
+  totalWeight += 20;
+  if (routine.items?.profilePicUploaded) earnedWeight += 20;
 
-  // 2. Community Replies (weight 25)
-  if (targets.communityReplies > 0) {
-    totalWeight += 25;
-    const ratio = Math.min(1, (routine.items.communityRepliesCount || 0) / targets.communityReplies);
-    earnedWeight += ratio * 25;
-  }
+  // 2. Upload Cover photo (weight 20)
+  totalWeight += 20;
+  if (routine.items?.coverPhotoUploaded) earnedWeight += 20;
 
-  // 3. Story Post (weight 20)
-  if (targets.storyPost) {
-    totalWeight += 20;
-    if (routine.items.storyPostDone) earnedWeight += 20;
-  }
+  // 3. Update Marital status (weight 20)
+  totalWeight += 20;
+  if (routine.items?.maritalStatusUpdated) earnedWeight += 20;
 
-  // 4. Group Share (weight 15)
-  if (targets.groupShare > 0) {
-    totalWeight += 15;
-    const ratio = Math.min(1, (routine.items.groupShareCount || 0) / targets.groupShare);
-    earnedWeight += ratio * 15;
-  }
+  // 4. Update School/College information (weight 20)
+  totalWeight += 20;
+  if (routine.items?.schoolCollegeUpdated) earnedWeight += 20;
 
-  // 5. Feed Scroll (weight 15)
-  totalWeight += 15;
-  if (routine.items.feedScrollDone) earnedWeight += 15;
+  // 5. Complete a post related to profile and identity (weight 20)
+  totalWeight += 20;
+  if (routine.items?.identityPostDone) earnedWeight += 20;
 
-  // 6. Dynamic Assigned Tasks (weight 20 each)
-  const dynamicItems = routine.items.dynamicChecklist || [];
+  // 6. Dynamic Assigned Tasks (weight 20 each if any)
+  const dynamicItems = routine.items?.dynamicChecklist || [];
   if (dynamicItems.length > 0) {
     dynamicItems.forEach((task) => {
       totalWeight += 20;
@@ -132,6 +113,11 @@ exports.getTodayRoutines = async (req, res) => {
           facebookAccountId: account._id,
           date: targetDate,
           items: {
+            profilePicUploaded: false,
+            coverPhotoUploaded: false,
+            maritalStatusUpdated: false,
+            schoolCollegeUpdated: false,
+            identityPostDone: false,
             feedScrollDone: false,
             commentsCount: 0,
             communityRepliesCount: 0,
@@ -260,6 +246,11 @@ exports.updateRoutineProgress = async (req, res) => {
 
     // Apply updates to routine.items
     if (updates) {
+      if (updates.profilePicUploaded !== undefined) routine.items.profilePicUploaded = updates.profilePicUploaded;
+      if (updates.coverPhotoUploaded !== undefined) routine.items.coverPhotoUploaded = updates.coverPhotoUploaded;
+      if (updates.maritalStatusUpdated !== undefined) routine.items.maritalStatusUpdated = updates.maritalStatusUpdated;
+      if (updates.schoolCollegeUpdated !== undefined) routine.items.schoolCollegeUpdated = updates.schoolCollegeUpdated;
+      if (updates.identityPostDone !== undefined) routine.items.identityPostDone = updates.identityPostDone;
       if (updates.feedScrollDone !== undefined) routine.items.feedScrollDone = updates.feedScrollDone;
       if (updates.commentsCount !== undefined) routine.items.commentsCount = Math.max(0, updates.commentsCount);
       if (updates.communityRepliesCount !== undefined)
@@ -357,6 +348,11 @@ exports.submitDailyWork = async (req, res) => {
         assignedProduct: acc.assignedProduct || 'none',
         completionPercentage,
         isCompleted,
+        profilePicUploaded: routine?.items?.profilePicUploaded || false,
+        coverPhotoUploaded: routine?.items?.coverPhotoUploaded || false,
+        maritalStatusUpdated: routine?.items?.maritalStatusUpdated || false,
+        schoolCollegeUpdated: routine?.items?.schoolCollegeUpdated || false,
+        identityPostDone: routine?.items?.identityPostDone || false,
         commentsCount: routine?.items?.commentsCount || 0,
         communityRepliesCount: routine?.items?.communityRepliesCount || 0,
         storyPostDone: routine?.items?.storyPostDone || false,

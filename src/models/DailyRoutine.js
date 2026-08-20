@@ -17,6 +17,11 @@ const dailyRoutineSchema = new mongoose.Schema(
       required: true,
     },
     items: {
+      profilePicUploaded: { type: Boolean, default: false },
+      coverPhotoUploaded: { type: Boolean, default: false },
+      maritalStatusUpdated: { type: Boolean, default: false },
+      schoolCollegeUpdated: { type: Boolean, default: false },
+      identityPostDone: { type: Boolean, default: false },
       feedScrollDone: { type: Boolean, default: false },
       commentsCount: { type: Number, default: 0 },
       communityRepliesCount: { type: Number, default: 0 },
