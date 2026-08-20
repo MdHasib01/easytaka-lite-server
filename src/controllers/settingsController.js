@@ -120,6 +120,8 @@ exports.updateSettings = async (req, res) => {
       if (model !== undefined) settings.aiConfig.model = String(model).trim();
       if (apiKey) settings.aiConfig.apiKey = encrypt(apiKey); // only overwrite on a real new value
       if (enabled !== undefined) settings.aiConfig.enabled = Boolean(enabled);
+    }
+
     if (mandatoryDailyTasks !== undefined && Array.isArray(mandatoryDailyTasks)) {
       settings.mandatoryDailyTasks = mandatoryDailyTasks.map((t, idx) => ({
         id: t.id || `task_${Date.now()}_${idx}`,
