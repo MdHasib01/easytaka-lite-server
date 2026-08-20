@@ -39,6 +39,7 @@ exports.updateSettings = async (req, res) => {
       facebookMilestoneReward,
       facebookMilestoneStep,
       defaultDailyCompletionReward,
+      dailyTaskScoreRules,
       minWithdrawalPoints,
       maxWithdrawalPoints,
       withdrawalCycleDays,
@@ -61,6 +62,15 @@ exports.updateSettings = async (req, res) => {
     }
     if (defaultDailyCompletionReward !== undefined) {
       settings.defaultDailyCompletionReward = Math.max(0, Number(defaultDailyCompletionReward));
+    }
+    if (dailyTaskScoreRules !== undefined && typeof dailyTaskScoreRules === 'object') {
+      settings.dailyTaskScoreRules = {
+        score5Points: dailyTaskScoreRules.score5Points !== undefined ? Math.max(0, Number(dailyTaskScoreRules.score5Points)) : (settings.dailyTaskScoreRules?.score5Points ?? 100),
+        score4Points: dailyTaskScoreRules.score4Points !== undefined ? Math.max(0, Number(dailyTaskScoreRules.score4Points)) : (settings.dailyTaskScoreRules?.score4Points ?? 80),
+        score3Points: dailyTaskScoreRules.score3Points !== undefined ? Math.max(0, Number(dailyTaskScoreRules.score3Points)) : (settings.dailyTaskScoreRules?.score3Points ?? 60),
+        score2Points: dailyTaskScoreRules.score2Points !== undefined ? Math.max(0, Number(dailyTaskScoreRules.score2Points)) : (settings.dailyTaskScoreRules?.score2Points ?? 40),
+        score1Points: dailyTaskScoreRules.score1Points !== undefined ? Math.max(0, Number(dailyTaskScoreRules.score1Points)) : (settings.dailyTaskScoreRules?.score1Points ?? 20),
+      };
     }
     if (minWithdrawalPoints !== undefined) {
       settings.minWithdrawalPoints = Math.max(1, Number(minWithdrawalPoints));

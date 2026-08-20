@@ -186,21 +186,6 @@ exports.submitTaskProof = async (req, res) => {
     const { taskId } = req.params;
     const { facebookAccountId, profileUrl, proofUrl, screenshotUrl, smmNotes } = req.body;
 
-    // Enforce 5 Facebook accounts requirement for SMM users
-    if (req.user.role !== 'admin') {
-      const activeAccountsCount = await FacebookAccount.countDocuments({
-        smmId: req.user._id,
-        isActive: true,
-      });
-
-      if (activeAccountsCount < 5) {
-        return res.status(403).json({
-          success: false,
-          message: `You must create at least 5 Facebook accounts before participating in tasks. (Currently: ${activeAccountsCount}/5)`,
-        });
-      }
-    }
-
     const task = await Task.findById(taskId);
     if (!task) {
       return res.status(404).json({ success: false, message: 'Task not found.' });
@@ -304,11 +289,11 @@ exports.getMySubmissions = async (req, res) => {
   }
 };
 
-// Admin Verify Submission (Approve / Reject with Notes & Reward Points)
+// Admin Verify Submission (Approve with Rating 1-5 / Reject with Feedback)
 exports.verifySubmission = async (req, res) => {
   try {
     const { id } = req.params;
-    const { action, adminNote, bonusPoints } = req.body;
+    const { action, adminNote, rating } = req.body;
 
     if (!action || !['approve', 'reject'].includes(action)) {
       return res.status(400).json({ success: false, message: "Action must be either 'approve' or 'reject'." });
@@ -328,28 +313,11 @@ exports.verifySubmission = async (req, res) => {
     }
 
     if (action === 'approve') {
-      const basePoints = submission.taskId ? submission.taskId.rewardPoints : 50;
-      const extra = Number(bonusPoints) || 0;
-      const totalPoints = basePoints + extra;
-
-      // Only award points if it was not already approved
-      if (submission.status !== 'approved') {
-        smmUser.rewardPoints += totalPoints;
-        await smmUser.save();
-
-        await PointTransaction.create({
-          userId: smmUser._id,
-          amount: totalPoints,
-          type: 'task_reward',
-          description: `Reward for task: "${submission.taskId ? submission.taskId.title : 'Task'}"${extra > 0 ? ` (+${extra} bonus)` : ''}`,
-          referenceId: submission._id,
-          balanceAfter: smmUser.rewardPoints,
-        });
-      }
+      const score = Math.min(5, Math.max(1, Number(rating) || 5));
 
       submission.status = 'approved';
+      submission.rating = score;
       submission.adminNote = adminNote || 'Approved by Admin';
-      submission.pointsAwarded = totalPoints;
       submission.verifiedBy = req.user._id;
       submission.verifiedAt = new Date();
       await submission.save();
@@ -357,15 +325,14 @@ exports.verifySubmission = async (req, res) => {
       // Emit real-time notification to SMM
       sendNotificationToUser(smmUser._id, {
         type: 'task_approved',
-        title: '🎉 Task Approved & Rewarded!',
-        message: `Your proof for "${submission.taskId ? submission.taskId.title : 'Task'}" was approved. +${totalPoints} PTS credited!`,
+        title: '🎉 Task Proof Approved!',
+        message: `Your proof for "${submission.taskId ? submission.taskId.title : 'Task'}" was approved with rating ${score}/5 ⭐. Points will be distributed at 12:00 AM midnight based on your daily average score.`,
         link: '/tasks?tab=completed',
-        points: totalPoints,
       });
 
       return res.json({
         success: true,
-        message: `Task approved! ${totalPoints} points awarded to ${smmUser.name}.`,
+        message: `Task approved with rating ${score}/5 ⭐! Daily points will be credited in the 12:00 AM midnight evaluation.`,
         submission,
       });
     } else {
@@ -373,7 +340,7 @@ exports.verifySubmission = async (req, res) => {
       if (!adminNote || adminNote.trim() === '') {
         return res.status(400).json({
           success: false,
-          message: 'Please provide a cancellation note/reason so the SMM knows how to fix it.',
+          message: 'Please provide a feedback note/reason so the SMM knows how to fix it.',
         });
       }
 
@@ -386,9 +353,9 @@ exports.verifySubmission = async (req, res) => {
       // Emit real-time notification to SMM
       sendNotificationToUser(smmUser._id, {
         type: 'task_rejected',
-        title: '⚠️ Task Revision Required',
-        message: `Your proof for "${submission.taskId ? submission.taskId.title : 'Task'}" was declined. Reason: ${adminNote.trim()}`,
-        link: '/tasks?tab=rejected',
+        title: '⚠️ Task Submission Needs Revision',
+        message: `Your proof for "${submission.taskId ? submission.taskId.title : 'Task'}" was rejected. Note: "${adminNote.trim()}".`,
+        link: '/tasks',
       });
 
       return res.json({

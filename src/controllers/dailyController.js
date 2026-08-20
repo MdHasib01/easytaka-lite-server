@@ -1,10 +1,12 @@
 const DailyRoutine = require('../models/DailyRoutine');
+const DailyWorkSubmission = require('../models/DailyWorkSubmission');
 const FacebookAccount = require('../models/FacebookAccount');
 const User = require('../models/User');
 const PointTransaction = require('../models/PointTransaction');
 const SystemSetting = require('../models/SystemSetting');
 const DailyTaskTemplate = require('../models/DailyTaskTemplate');
 const taskDistributionService = require('../services/taskDistributionService');
+const { sendNotificationToUser, sendNotificationToRole } = require('../socket');
 
 const getTodayString = () => {
   const d = new Date();
@@ -76,11 +78,20 @@ exports.getTodayRoutines = async (req, res) => {
     const accounts = await FacebookAccount.find({ smmId: req.user._id, isActive: true });
     const settings = await SystemSetting.getSettings();
 
-    const dailyReward = user?.dailyTaskCompletionReward !== undefined 
-      ? user.dailyTaskCompletionReward 
-      : (settings.defaultDailyCompletionReward || 50);
+    const maxDailyReward = settings.defaultDailyCompletionReward || 100;
+    const scoreRules = settings.dailyTaskScoreRules || {
+      score5Points: 100,
+      score4Points: 80,
+      score3Points: 60,
+      score2Points: 40,
+      score1Points: 20,
+    };
 
     const dailyRewardClaimedToday = user?.lastDailyRewardDate === targetDate;
+    const existingSubmission = await DailyWorkSubmission.findOne({
+      smmId: req.user._id,
+      date: targetDate,
+    }).populate('reviewedBy', 'name email');
 
     if (accounts.length === 0) {
       return res.json({
@@ -89,8 +100,10 @@ exports.getTodayRoutines = async (req, res) => {
         totalAccounts: 0,
         overallProgress: 0,
         completedAccountsCount: 0,
-        dailyTaskCompletionReward: dailyReward,
+        dailyTaskCompletionReward: maxDailyReward,
+        scoreRules,
         dailyRewardClaimedToday,
+        submission: existingSubmission,
         routines: [],
       });
     }
@@ -206,8 +219,10 @@ exports.getTodayRoutines = async (req, res) => {
       totalAccounts: accounts.length,
       overallProgress,
       completedAccountsCount,
-      dailyTaskCompletionReward: dailyReward,
+      dailyTaskCompletionReward: maxDailyReward,
+      scoreRules,
       dailyRewardClaimedToday,
+      submission: existingSubmission,
       routines,
     });
   } catch (error) {
@@ -296,58 +311,300 @@ exports.updateRoutineProgress = async (req, res) => {
     allRoutines.forEach((r) => (totalSum += r.completionPercentage));
     const overallProgress = allAccounts.length > 0 ? Math.round(totalSum / allAccounts.length) : 0;
 
-    let dailyRewardAwarded = false;
-    let dailyRewardAmount = 0;
-
-    // Check if 100% completed today and reward not yet claimed for targetDate
-    if (overallProgress === 100) {
-      const user = await User.findById(req.user._id);
-      if (user && user.lastDailyRewardDate !== targetDate) {
-        const settings = await SystemSetting.getSettings();
-        dailyRewardAmount = user.dailyTaskCompletionReward !== undefined && user.dailyTaskCompletionReward > 0
-          ? user.dailyTaskCompletionReward
-          : (settings.defaultDailyCompletionReward || 50);
-
-        user.rewardPoints += dailyRewardAmount;
-        user.streakDays = (user.streakDays || 0) + 1;
-        user.lastActiveDate = targetDate;
-        user.lastDailyRewardDate = targetDate;
-        await user.save();
-
-        await PointTransaction.create({
-          userId: user._id,
-          amount: dailyRewardAmount,
-          type: 'daily_bonus',
-          description: `Daily task completion reward for ${targetDate} (100% completed)`,
-          balanceAfter: user.rewardPoints,
-        });
-
-        dailyRewardAwarded = true;
-
-        // Emit real-time celebration notification
-        const { sendNotificationToUser } = require('../socket');
-        sendNotificationToUser(user._id, {
-          type: 'daily_reward',
-          title: '🏆 100% Daily Routine Completed!',
-          message: `Awesome work! You completed 100% of today's tasks and claimed +${dailyRewardAmount} PTS!`,
-          link: '/daily',
-          points: dailyRewardAmount,
-        });
-      }
-    }
-
     return res.json({
       success: true,
-      message: dailyRewardAwarded
-        ? `🎉 Incredible! You completed all daily tasks and earned +${dailyRewardAmount} PTS!`
-        : 'Daily progress updated!',
+      message: 'Daily progress updated!',
       routine,
       overallProgress,
-      dailyRewardAwarded,
-      dailyRewardAmount,
     });
   } catch (error) {
     console.error('Update daily routine error:', error);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// SMM Submit Daily Work for Admin Review
+exports.submitDailyWork = async (req, res) => {
+  try {
+    const { date, smmNotes, proofUrl, screenshotUrl } = req.body;
+    const targetDate = date || getTodayString();
+
+    const accounts = await FacebookAccount.find({ smmId: req.user._id, isActive: true });
+    if (accounts.length === 0) {
+      return res.status(400).json({ success: false, message: 'You have no active Facebook accounts.' });
+    }
+
+    const routines = await DailyRoutine.find({ smmId: req.user._id, date: targetDate });
+
+    let totalPercentageSum = 0;
+    let completedAccountsCount = 0;
+
+    const accountSummaries = accounts.map((acc) => {
+      const routine = routines.find((r) => r.facebookAccountId.toString() === acc._id.toString());
+      const completionPercentage = routine ? routine.completionPercentage : 0;
+      const isCompleted = routine ? routine.isCompleted : false;
+
+      totalPercentageSum += completionPercentage;
+      if (isCompleted) completedAccountsCount += 1;
+
+      return {
+        facebookAccountId: acc._id,
+        accountName: acc.accountName,
+        profileUrl: acc.profileUrl,
+        avatarUrl: acc.avatarUrl,
+        accountMode: acc.accountMode || 'general',
+        assignedProduct: acc.assignedProduct || 'none',
+        completionPercentage,
+        isCompleted,
+        commentsCount: routine?.items?.commentsCount || 0,
+        communityRepliesCount: routine?.items?.communityRepliesCount || 0,
+        storyPostDone: routine?.items?.storyPostDone || false,
+        feedScrollDone: routine?.items?.feedScrollDone || false,
+        groupShareCount: routine?.items?.groupShareCount || 0,
+        dynamicChecklist: (routine?.items?.dynamicChecklist || []).map((d) => ({
+          title: d.title,
+          taskType: d.taskType,
+          mode: d.mode,
+          isDone: d.isDone,
+        })),
+        notes: routine?.notes || '',
+      };
+    });
+
+    const overallProgress = Math.round(totalPercentageSum / accounts.length);
+
+    let submission = await DailyWorkSubmission.findOne({
+      smmId: req.user._id,
+      date: targetDate,
+    });
+
+    if (submission) {
+      if (submission.status === 'approved') {
+        return res.status(400).json({
+          success: false,
+          message: 'Your daily routine for this date has already been reviewed and approved.',
+        });
+      }
+
+      submission.overallProgress = overallProgress;
+      submission.totalAccounts = accounts.length;
+      submission.completedAccountsCount = completedAccountsCount;
+      submission.accountSummaries = accountSummaries;
+      submission.smmNotes = smmNotes !== undefined ? smmNotes : submission.smmNotes;
+      submission.proofUrl = proofUrl !== undefined ? proofUrl : submission.proofUrl;
+      submission.screenshotUrl = screenshotUrl !== undefined ? screenshotUrl : submission.screenshotUrl;
+      submission.status = 'pending';
+      submission.adminFeedback = '';
+      submission.submittedAt = new Date();
+      await submission.save();
+    } else {
+      submission = await DailyWorkSubmission.create({
+        smmId: req.user._id,
+        date: targetDate,
+        overallProgress,
+        totalAccounts: accounts.length,
+        completedAccountsCount,
+        accountSummaries,
+        smmNotes: smmNotes || '',
+        proofUrl: proofUrl || '',
+        screenshotUrl: screenshotUrl || '',
+        status: 'pending',
+        submittedAt: new Date(),
+      });
+    }
+
+    // Real-time notification to Admins
+    sendNotificationToRole('admin', {
+      type: 'daily_submission',
+      title: '📋 New Daily Tasks Submitted',
+      message: `${req.user.name || 'SMM'} submitted daily routine for ${targetDate} (${overallProgress}% complete).`,
+      link: '/verifications',
+    });
+
+    const populated = await DailyWorkSubmission.findById(submission._id).populate('smmId', 'name email avatar');
+
+    return res.status(201).json({
+      success: true,
+      message: 'Daily routine submitted successfully! Awaiting Admin review & scoring.',
+      submission: populated,
+    });
+  } catch (error) {
+    console.error('Submit daily work error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Admin List All Daily Work Submissions
+exports.listDailySubmissions = async (req, res) => {
+  try {
+    const { status, date, smmId } = req.query;
+    const filter = {};
+
+    if (status && status !== 'all') {
+      filter.status = status;
+    }
+    if (date) {
+      filter.date = date;
+    }
+    if (smmId) {
+      filter.smmId = smmId;
+    }
+
+    const submissions = await DailyWorkSubmission.find(filter)
+      .populate('smmId', 'name email avatar rewardPoints streakDays')
+      .populate('reviewedBy', 'name email')
+      .sort({ date: -1, createdAt: -1 });
+
+    const settings = await SystemSetting.getSettings();
+
+    return res.json({
+      success: true,
+      count: submissions.length,
+      defaultDailyCompletionReward: settings.defaultDailyCompletionReward || 100,
+      scoreRules: settings.dailyTaskScoreRules || {
+        score5Points: 100,
+        score4Points: 80,
+        score3Points: 60,
+        score2Points: 40,
+        score1Points: 20,
+      },
+      submissions,
+    });
+  } catch (error) {
+    console.error('List daily submissions error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Admin Review Daily Work Submission (Score 1-5 & Points)
+exports.reviewDailySubmission = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { action, reviewScore, pointsAwarded, adminFeedback } = req.body;
+
+    if (!action || !['approve', 'reject'].includes(action)) {
+      return res.status(400).json({ success: false, message: "Action must be either 'approve' or 'reject'." });
+    }
+
+    const submission = await DailyWorkSubmission.findById(id).populate('smmId');
+    if (!submission) {
+      return res.status(404).json({ success: false, message: 'Daily submission not found.' });
+    }
+
+    const smmUser = await User.findById(submission.smmId._id);
+    if (!smmUser) {
+      return res.status(404).json({ success: false, message: 'SMM User not found.' });
+    }
+
+    const settings = await SystemSetting.getSettings();
+    const scoreRules = settings.dailyTaskScoreRules || {
+      score5Points: 100,
+      score4Points: 80,
+      score3Points: 60,
+      score2Points: 40,
+      score1Points: 20,
+    };
+
+    if (action === 'approve') {
+      const score = Math.min(5, Math.max(1, Number(reviewScore) || 5));
+      let finalPoints = Number(pointsAwarded);
+
+      if (isNaN(finalPoints) || finalPoints === undefined || finalPoints < 0) {
+        const ruleKey = `score${score}Points`;
+        finalPoints = scoreRules[ruleKey] !== undefined ? scoreRules[ruleKey] : Math.round((score / 5) * (settings.defaultDailyCompletionReward || 100));
+      }
+
+      // Only award points if not already approved
+      if (submission.status !== 'approved') {
+        smmUser.rewardPoints += finalPoints;
+        if (smmUser.lastDailyRewardDate !== submission.date) {
+          smmUser.streakDays = (smmUser.streakDays || 0) + 1;
+          smmUser.lastDailyRewardDate = submission.date;
+          smmUser.lastActiveDate = submission.date;
+        }
+        await smmUser.save();
+
+        await PointTransaction.create({
+          userId: smmUser._id,
+          amount: finalPoints,
+          type: 'daily_bonus',
+          description: `Daily task reward for ${submission.date} (Review Score: ${score}/5 ⭐ - ${finalPoints} PTS)`,
+          referenceId: submission._id,
+          balanceAfter: smmUser.rewardPoints,
+        });
+      }
+
+      submission.status = 'approved';
+      submission.reviewScore = score;
+      submission.pointsAwarded = finalPoints;
+      submission.adminFeedback = adminFeedback ? adminFeedback.trim() : 'Approved by Admin';
+      submission.reviewedBy = req.user._id;
+      submission.reviewedAt = new Date();
+      await submission.save();
+
+      // Emit real-time notification to SMM
+      sendNotificationToUser(smmUser._id, {
+        type: 'daily_reward',
+        title: '🏆 Daily Routine Evaluated & Rewarded!',
+        message: `Your daily tasks for ${submission.date} were reviewed! Score: ${score}/5 ⭐ (+${finalPoints} PTS credited).`,
+        link: '/daily',
+        points: finalPoints,
+      });
+
+      return res.json({
+        success: true,
+        message: `Daily submission approved! ${finalPoints} PTS (Score: ${score}/5) awarded to ${smmUser.name}.`,
+        submission,
+      });
+    } else {
+      // Reject / Revision Requested
+      if (!adminFeedback || adminFeedback.trim() === '') {
+        return res.status(400).json({
+          success: false,
+          message: 'Please provide feedback/instructions so the SMM agent knows what to fix.',
+        });
+      }
+
+      submission.status = 'rejected';
+      submission.adminFeedback = adminFeedback.trim();
+      submission.reviewedBy = req.user._id;
+      submission.reviewedAt = new Date();
+      await submission.save();
+
+      // Emit real-time notification to SMM
+      sendNotificationToUser(smmUser._id, {
+        type: 'daily_rejected',
+        title: '⚠️ Daily Routine Revision Required',
+        message: `Your daily tasks for ${submission.date} need updates: "${adminFeedback.trim()}".`,
+        link: '/daily',
+      });
+
+      return res.json({
+        success: true,
+        message: 'Daily submission rejected with revision feedback.',
+        submission,
+      });
+    }
+  } catch (error) {
+    console.error('Review daily submission error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// Admin manually trigger midnight daily task evaluation (for testing or date backfill)
+exports.triggerMidnightDailyRewards = async (req, res) => {
+  try {
+    const { processDailyMidnightRewards } = require('../services/dailyRewardCronService');
+    const { date } = req.body;
+    const result = await processDailyMidnightRewards(date);
+    return res.json({
+      success: true,
+      message: `Midnight daily rewards evaluation processed for ${result.date || 'yesterday'} (${result.rewardedCount || 0} SMMs rewarded).`,
+      result,
+    });
+  } catch (error) {
+    console.error('Trigger midnight daily rewards error:', error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+

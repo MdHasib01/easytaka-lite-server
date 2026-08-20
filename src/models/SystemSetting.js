@@ -19,8 +19,15 @@ const systemSettingSchema = new mongoose.Schema(
     },
     defaultDailyCompletionReward: {
       type: Number,
-      default: 50,
+      default: 100,
       min: 0,
+    },
+    dailyTaskScoreRules: {
+      score5Points: { type: Number, default: 100, min: 0 },
+      score4Points: { type: Number, default: 80, min: 0 },
+      score3Points: { type: Number, default: 60, min: 0 },
+      score2Points: { type: Number, default: 40, min: 0 },
+      score1Points: { type: Number, default: 20, min: 0 },
     },
     minWithdrawalPoints: {
       type: Number,
@@ -84,13 +91,29 @@ systemSettingSchema.statics.getSettings = async function () {
       facebookAccountReward: 40,
       facebookMilestoneReward: 100,
       facebookMilestoneStep: 5,
-      defaultDailyCompletionReward: 50,
+      defaultDailyCompletionReward: 100,
+      dailyTaskScoreRules: {
+        score5Points: 100,
+        score4Points: 80,
+        score3Points: 60,
+        score2Points: 40,
+        score1Points: 20,
+      },
       minWithdrawalPoints: 50,
       maxWithdrawalPoints: 1000,
       withdrawalCycleDays: 7,
       pointToBdtRate: 1,
       withdrawalEnabled: true,
     });
+  } else if (!settings.dailyTaskScoreRules || settings.dailyTaskScoreRules.score5Points === undefined) {
+    settings.dailyTaskScoreRules = {
+      score5Points: settings.defaultDailyCompletionReward || 100,
+      score4Points: Math.round((settings.defaultDailyCompletionReward || 100) * 0.8),
+      score3Points: Math.round((settings.defaultDailyCompletionReward || 100) * 0.6),
+      score2Points: Math.round((settings.defaultDailyCompletionReward || 100) * 0.4),
+      score1Points: Math.round((settings.defaultDailyCompletionReward || 100) * 0.2),
+    };
+    await settings.save();
   }
   return settings;
 };
