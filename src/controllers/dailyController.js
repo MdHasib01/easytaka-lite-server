@@ -221,6 +221,7 @@ exports.getTodayRoutines = async (req, res) => {
       completedAccountsCount,
       dailyTaskCompletionReward: maxDailyReward,
       scoreRules,
+      ratingBreakpoints: settings.ratingBreakpoints || [],
       dailyRewardClaimedToday,
       submission: existingSubmission,
       routines,
@@ -468,6 +469,7 @@ exports.listDailySubmissions = async (req, res) => {
         score2Points: 40,
         score1Points: 20,
       },
+      ratingBreakpoints: settings.ratingBreakpoints || [],
       submissions,
     });
   } catch (error) {
@@ -510,8 +512,17 @@ exports.reviewDailySubmission = async (req, res) => {
       let finalPoints = Number(pointsAwarded);
 
       if (isNaN(finalPoints) || finalPoints === undefined || finalPoints < 0) {
-        const ruleKey = `score${score}Points`;
-        finalPoints = scoreRules[ruleKey] !== undefined ? scoreRules[ruleKey] : Math.round((score / 5) * (settings.defaultDailyCompletionReward || 100));
+        const breakpoints = Array.isArray(settings.ratingBreakpoints) && settings.ratingBreakpoints.length > 0
+          ? [...settings.ratingBreakpoints].sort((a, b) => b.minRating - a.minRating)
+          : [];
+
+        if (breakpoints.length > 0) {
+          const matched = breakpoints.find((bp) => score >= bp.minRating - 0.05);
+          finalPoints = matched ? matched.points : (breakpoints[breakpoints.length - 1]?.points || 0);
+        } else {
+          const ruleKey = `score${score}Points`;
+          finalPoints = scoreRules[ruleKey] !== undefined ? scoreRules[ruleKey] : Math.round((score / 5) * (settings.defaultDailyCompletionReward || 100));
+        }
       }
 
       // Only award points if not already approved
