@@ -111,12 +111,29 @@ const processDailyMidnightRewards = async (targetDate) => {
       const avgRating = ratings.reduce((sum, r) => sum + r, 0) / ratings.length;
       const roundedScore = Math.min(5, Math.max(1, Math.round(avgRating)));
 
-      // Calculate Points Awarded based on global scoring rules
-      const ruleKey = `score${roundedScore}Points`;
-      const points =
-        scoreRules[ruleKey] !== undefined
-          ? scoreRules[ruleKey]
-          : Math.round((avgRating / 5) * maxReward);
+      // Calculate Points Awarded based on rating breakpoints or fallback score rules
+      let points = 0;
+      const breakpoints = Array.isArray(settings.ratingBreakpoints) && settings.ratingBreakpoints.length > 0
+        ? [...settings.ratingBreakpoints].sort((a, b) => b.minRating - a.minRating)
+        : [];
+
+      if (breakpoints.length > 0) {
+        // Find highest breakpoint satisfied (with 0.05 tolerance for floating-point comparisons)
+        const matched = breakpoints.find((bp) => avgRating >= (bp.minRating - 0.05));
+        if (matched) {
+          points = matched.points;
+        } else {
+          // If below all defined breakpoints
+          const lowest = breakpoints[breakpoints.length - 1];
+          points = lowest ? lowest.points : 0;
+        }
+      } else {
+        const ruleKey = `score${roundedScore}Points`;
+        points =
+          scoreRules[ruleKey] !== undefined
+            ? scoreRules[ruleKey]
+            : Math.round((avgRating / 5) * maxReward);
+      }
 
       // Award points & update streak
       smm.rewardPoints = (smm.rewardPoints || 0) + points;

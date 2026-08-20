@@ -29,6 +29,13 @@ const systemSettingSchema = new mongoose.Schema(
       score2Points: { type: Number, default: 40, min: 0 },
       score1Points: { type: Number, default: 20, min: 0 },
     },
+    ratingBreakpoints: [
+      {
+        minRating: { type: Number, required: true },
+        points: { type: Number, required: true },
+        label: { type: String, default: '' },
+      },
+    ],
     minWithdrawalPoints: {
       type: Number,
       default: 50,
@@ -99,21 +106,52 @@ systemSettingSchema.statics.getSettings = async function () {
         score2Points: 40,
         score1Points: 20,
       },
+      ratingBreakpoints: [
+        { minRating: 5.0, points: 90, label: '5.0 ⭐ (Excellent)' },
+        { minRating: 4.5, points: 85, label: '4.5 ⭐ (Superior)' },
+        { minRating: 4.0, points: 80, label: '4.0 ⭐ (Very Good)' },
+        { minRating: 3.5, points: 70, label: '3.5 ⭐ (Good Plus)' },
+        { minRating: 3.0, points: 60, label: '3.0 ⭐ (Good)' },
+        { minRating: 2.5, points: 50, label: '2.5 ⭐ (Satisfactory)' },
+        { minRating: 2.0, points: 40, label: '2.0 ⭐ (Average)' },
+        { minRating: 1.5, points: 30, label: '1.5 ⭐ (Below Average)' },
+        { minRating: 1.0, points: 20, label: '1.0 ⭐ (Poor)' },
+      ],
       minWithdrawalPoints: 50,
       maxWithdrawalPoints: 1000,
       withdrawalCycleDays: 7,
       pointToBdtRate: 1,
       withdrawalEnabled: true,
     });
-  } else if (!settings.dailyTaskScoreRules || settings.dailyTaskScoreRules.score5Points === undefined) {
-    settings.dailyTaskScoreRules = {
-      score5Points: settings.defaultDailyCompletionReward || 100,
-      score4Points: Math.round((settings.defaultDailyCompletionReward || 100) * 0.8),
-      score3Points: Math.round((settings.defaultDailyCompletionReward || 100) * 0.6),
-      score2Points: Math.round((settings.defaultDailyCompletionReward || 100) * 0.4),
-      score1Points: Math.round((settings.defaultDailyCompletionReward || 100) * 0.2),
-    };
-    await settings.save();
+  } else {
+    let shouldSave = false;
+    if (!settings.dailyTaskScoreRules || settings.dailyTaskScoreRules.score5Points === undefined) {
+      settings.dailyTaskScoreRules = {
+        score5Points: settings.defaultDailyCompletionReward || 100,
+        score4Points: Math.round((settings.defaultDailyCompletionReward || 100) * 0.8),
+        score3Points: Math.round((settings.defaultDailyCompletionReward || 100) * 0.6),
+        score2Points: Math.round((settings.defaultDailyCompletionReward || 100) * 0.4),
+        score1Points: Math.round((settings.defaultDailyCompletionReward || 100) * 0.2),
+      };
+      shouldSave = true;
+    }
+    if (!settings.ratingBreakpoints || settings.ratingBreakpoints.length === 0) {
+      settings.ratingBreakpoints = [
+        { minRating: 5.0, points: 90, label: '5.0 ⭐ (Excellent)' },
+        { minRating: 4.5, points: 85, label: '4.5 ⭐ (Superior)' },
+        { minRating: 4.0, points: 80, label: '4.0 ⭐ (Very Good)' },
+        { minRating: 3.5, points: 70, label: '3.5 ⭐ (Good Plus)' },
+        { minRating: 3.0, points: 60, label: '3.0 ⭐ (Good)' },
+        { minRating: 2.5, points: 50, label: '2.5 ⭐ (Satisfactory)' },
+        { minRating: 2.0, points: 40, label: '2.0 ⭐ (Average)' },
+        { minRating: 1.5, points: 30, label: '1.5 ⭐ (Below Average)' },
+        { minRating: 1.0, points: 20, label: '1.0 ⭐ (Poor)' },
+      ];
+      shouldSave = true;
+    }
+    if (shouldSave) {
+      await settings.save();
+    }
   }
   return settings;
 };

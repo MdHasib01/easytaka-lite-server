@@ -40,6 +40,7 @@ exports.updateSettings = async (req, res) => {
       facebookMilestoneStep,
       defaultDailyCompletionReward,
       dailyTaskScoreRules,
+      ratingBreakpoints,
       minWithdrawalPoints,
       maxWithdrawalPoints,
       withdrawalCycleDays,
@@ -71,6 +72,16 @@ exports.updateSettings = async (req, res) => {
         score2Points: dailyTaskScoreRules.score2Points !== undefined ? Math.max(0, Number(dailyTaskScoreRules.score2Points)) : (settings.dailyTaskScoreRules?.score2Points ?? 40),
         score1Points: dailyTaskScoreRules.score1Points !== undefined ? Math.max(0, Number(dailyTaskScoreRules.score1Points)) : (settings.dailyTaskScoreRules?.score1Points ?? 20),
       };
+    }
+    if (ratingBreakpoints !== undefined && Array.isArray(ratingBreakpoints)) {
+      settings.ratingBreakpoints = ratingBreakpoints
+        .map((bp) => ({
+          minRating: Number(bp.minRating),
+          points: Math.max(0, Number(bp.points)),
+          label: bp.label ? String(bp.label).trim() : `${Number(bp.minRating).toFixed(1)} ⭐`,
+        }))
+        .filter((bp) => !isNaN(bp.minRating) && !isNaN(bp.points))
+        .sort((a, b) => b.minRating - a.minRating);
     }
     if (minWithdrawalPoints !== undefined) {
       settings.minWithdrawalPoints = Math.max(1, Number(minWithdrawalPoints));
