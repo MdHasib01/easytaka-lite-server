@@ -27,6 +27,13 @@ const dailyRoutineSchema = new mongoose.Schema(
       communityRepliesCount: { type: Number, default: 0 },
       storyPostDone: { type: Boolean, default: false },
       groupShareCount: { type: Number, default: 0 },
+      mandatoryChecklist: [
+        {
+          taskId: { type: String, required: true },
+          isDone: { type: Boolean, default: false },
+          completedAt: { type: Date },
+        },
+      ],
       customChecklist: [
         {
           taskName: { type: String },

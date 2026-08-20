@@ -48,6 +48,13 @@ const dailyWorkSubmissionSchema = new mongoose.Schema(
         storyPostDone: { type: Boolean, default: false },
         feedScrollDone: { type: Boolean, default: false },
         groupShareCount: { type: Number, default: 0 },
+        mandatoryChecklist: [
+          {
+            taskId: { type: String },
+            title: { type: String },
+            isDone: { type: Boolean, default: false },
+          },
+        ],
         dynamicChecklist: [
           {
             title: { type: String },

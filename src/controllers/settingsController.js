@@ -48,6 +48,7 @@ exports.updateSettings = async (req, res) => {
       withdrawalEnabled,
       recoveryEmailConfig,
       aiConfig,
+      mandatoryDailyTasks,
     } = req.body;
 
     let settings = await SystemSetting.getSettings();
@@ -119,6 +120,18 @@ exports.updateSettings = async (req, res) => {
       if (model !== undefined) settings.aiConfig.model = String(model).trim();
       if (apiKey) settings.aiConfig.apiKey = encrypt(apiKey); // only overwrite on a real new value
       if (enabled !== undefined) settings.aiConfig.enabled = Boolean(enabled);
+    if (mandatoryDailyTasks !== undefined && Array.isArray(mandatoryDailyTasks)) {
+      settings.mandatoryDailyTasks = mandatoryDailyTasks.map((t, idx) => ({
+        id: t.id || `task_${Date.now()}_${idx}`,
+        title: String(t.title || '').trim(),
+        titleEn: t.titleEn ? String(t.titleEn).trim() : '',
+        description: t.description ? String(t.description).trim() : '',
+        taskType: t.taskType || 'custom',
+        groupName: t.groupName ? String(t.groupName).trim() : '',
+        targetUrl: t.targetUrl ? String(t.targetUrl).trim() : '',
+        isEnabled: t.isEnabled !== undefined ? Boolean(t.isEnabled) : true,
+        order: t.order !== undefined ? Number(t.order) : idx + 1,
+      }));
     }
 
     await settings.save();

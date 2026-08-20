@@ -72,6 +72,31 @@ const systemSettingSchema = new mongoose.Schema(
       // facebook/meta sender heuristic.
       triggerSender: { type: String, default: '' },
     },
+    mandatoryDailyTasks: [
+      {
+        id: { type: String, required: true },
+        title: { type: String, required: true },
+        titleEn: { type: String, default: '' },
+        description: { type: String, default: '' },
+        taskType: {
+          type: String,
+          enum: [
+            'profile_pic',
+            'cover_photo',
+            'marital_status',
+            'school_college',
+            'identity_post',
+            'group_join',
+            'custom',
+          ],
+          default: 'custom',
+        },
+        groupName: { type: String, default: '' },
+        targetUrl: { type: String, default: '' },
+        isEnabled: { type: Boolean, default: true },
+        order: { type: Number, default: 0 },
+      },
+    ],
     aiConfig: {
       provider: { type: String, enum: ['openai', 'gemini'], default: 'openai' },
       model: { type: String, default: '' },
@@ -146,6 +171,66 @@ systemSettingSchema.statics.getSettings = async function () {
         { minRating: 2.0, points: 40, label: '2.0 ⭐ (Average)' },
         { minRating: 1.5, points: 30, label: '1.5 ⭐ (Below Average)' },
         { minRating: 1.0, points: 20, label: '1.0 ⭐ (Poor)' },
+      ];
+      shouldSave = true;
+    }
+    if (!settings.mandatoryDailyTasks || settings.mandatoryDailyTasks.length === 0) {
+      settings.mandatoryDailyTasks = [
+        {
+          id: 'profile_pic',
+          title: 'প্রোফাইল পিকচার আপলোড',
+          titleEn: 'Upload profile picture',
+          description: 'বাস্তবসম্মত ও শালীন প্রোফাইল ছবি যুক্ত করুন',
+          taskType: 'profile_pic',
+          groupName: '',
+          targetUrl: '',
+          isEnabled: true,
+          order: 1,
+        },
+        {
+          id: 'cover_photo',
+          title: 'কভার ফটো আপলোড',
+          titleEn: 'Upload Cover photo',
+          description: 'প্রাকৃতিক বা রুচিশীল কভার ছবি আপলোড করুন',
+          taskType: 'cover_photo',
+          groupName: '',
+          targetUrl: '',
+          isEnabled: true,
+          order: 2,
+        },
+        {
+          id: 'marital_status',
+          title: 'বৈবাহিক অবস্থা আপডেট (Married)',
+          titleEn: 'Update Marital status',
+          description: 'Relationship Status অবশ্যই "Married" (বিবাহিত) সিলেক্ট করুন',
+          taskType: 'marital_status',
+          groupName: '',
+          targetUrl: '',
+          isEnabled: true,
+          order: 3,
+        },
+        {
+          id: 'school_college',
+          title: 'স্কুল/কলেজের তথ্য আপডেট',
+          titleEn: 'Update School/College information',
+          description: 'প্রোফাইলে বাস্তবসম্মত স্কুল বা কলেজের তথ্য যোগ করুন',
+          taskType: 'school_college',
+          groupName: '',
+          targetUrl: '',
+          isEnabled: true,
+          order: 4,
+        },
+        {
+          id: 'identity_post',
+          title: 'প্রোফাইল ও পরিচয়ের সাথে মিল রেখে পোস্ট',
+          titleEn: 'Complete a post related to profile & identity',
+          description: 'আইডির মা/সংসার বা বাস্তব পরিচয়ের সাথে মিল রেখে পোস্ট সম্পন্ন করুন',
+          taskType: 'identity_post',
+          groupName: '',
+          targetUrl: '',
+          isEnabled: true,
+          order: 5,
+        },
       ];
       shouldSave = true;
     }

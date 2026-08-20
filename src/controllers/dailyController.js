@@ -13,32 +13,45 @@ const getTodayString = () => {
   return d.toISOString().split('T')[0]; // YYYY-MM-DD
 };
 
-// Calculate percentage for a daily routine doc including standard targets and dynamic tasks
-const computePercentage = (routine, account) => {
+// Calculate percentage for a daily routine doc including standard mandatory tasks and dynamic tasks
+const computePercentage = (routine, account, mandatoryTasks = []) => {
   let totalWeight = 0;
   let earnedWeight = 0;
 
-  // 1. Upload profile picture (weight 20)
-  totalWeight += 20;
-  if (routine.items?.profilePicUploaded) earnedWeight += 20;
+  const activeMandatory = mandatoryTasks && mandatoryTasks.length > 0
+    ? mandatoryTasks.filter((t) => t.isEnabled !== false)
+    : [
+        { id: 'profile_pic' },
+        { id: 'cover_photo' },
+        { id: 'marital_status' },
+        { id: 'school_college' },
+        { id: 'identity_post' },
+      ];
 
-  // 2. Upload Cover photo (weight 20)
-  totalWeight += 20;
-  if (routine.items?.coverPhotoUploaded) earnedWeight += 20;
+  const mandatoryChecklist = routine.items?.mandatoryChecklist || [];
+  const checklistMap = new Map();
+  mandatoryChecklist.forEach((m) => checklistMap.set(m.taskId, m.isDone));
 
-  // 3. Update Marital status (weight 20)
-  totalWeight += 20;
-  if (routine.items?.maritalStatusUpdated) earnedWeight += 20;
+  activeMandatory.forEach((task) => {
+    totalWeight += 20;
+    let isDone = false;
+    if (checklistMap.has(task.id)) {
+      isDone = !!checklistMap.get(task.id);
+    } else if (task.id === 'profile_pic' || task.taskType === 'profile_pic') {
+      isDone = !!routine.items?.profilePicUploaded;
+    } else if (task.id === 'cover_photo' || task.taskType === 'cover_photo') {
+      isDone = !!routine.items?.coverPhotoUploaded;
+    } else if (task.id === 'marital_status' || task.taskType === 'marital_status') {
+      isDone = !!routine.items?.maritalStatusUpdated;
+    } else if (task.id === 'school_college' || task.taskType === 'school_college') {
+      isDone = !!routine.items?.schoolCollegeUpdated;
+    } else if (task.id === 'identity_post' || task.taskType === 'identity_post') {
+      isDone = !!routine.items?.identityPostDone;
+    }
+    if (isDone) earnedWeight += 20;
+  });
 
-  // 4. Update School/College information (weight 20)
-  totalWeight += 20;
-  if (routine.items?.schoolCollegeUpdated) earnedWeight += 20;
-
-  // 5. Complete a post related to profile and identity (weight 20)
-  totalWeight += 20;
-  if (routine.items?.identityPostDone) earnedWeight += 20;
-
-  // 6. Dynamic Assigned Tasks (weight 20 each if any)
+  // Dynamic Assigned Tasks (weight 20 each if any)
   const dynamicItems = routine.items?.dynamicChecklist || [];
   if (dynamicItems.length > 0) {
     dynamicItems.forEach((task) => {
@@ -166,7 +179,11 @@ exports.getTodayRoutines = async (req, res) => {
         }));
       }
 
-      const { percentage, isCompleted } = computePercentage(routine, account);
+      const { percentage, isCompleted } = computePercentage(
+        routine,
+        account,
+        settings.mandatoryDailyTasks
+      );
       routine.completionPercentage = percentage;
       routine.isCompleted = isCompleted;
       await routine.save();
@@ -208,6 +225,7 @@ exports.getTodayRoutines = async (req, res) => {
       dailyTaskCompletionReward: maxDailyReward,
       scoreRules,
       ratingBreakpoints: settings.ratingBreakpoints || [],
+      mandatoryDailyTasks: settings.mandatoryDailyTasks || [],
       dailyRewardClaimedToday,
       submission: existingSubmission,
       routines,
@@ -258,6 +276,16 @@ exports.updateRoutineProgress = async (req, res) => {
       if (updates.storyPostDone !== undefined) routine.items.storyPostDone = updates.storyPostDone;
       if (updates.groupShareCount !== undefined) routine.items.groupShareCount = Math.max(0, updates.groupShareCount);
       if (updates.customChecklist !== undefined) routine.items.customChecklist = updates.customChecklist;
+      if (updates.mandatoryChecklist !== undefined) {
+        routine.items.mandatoryChecklist = updates.mandatoryChecklist;
+        updates.mandatoryChecklist.forEach((m) => {
+          if (m.taskId === 'profile_pic') routine.items.profilePicUploaded = m.isDone;
+          if (m.taskId === 'cover_photo') routine.items.coverPhotoUploaded = m.isDone;
+          if (m.taskId === 'marital_status') routine.items.maritalStatusUpdated = m.isDone;
+          if (m.taskId === 'school_college') routine.items.schoolCollegeUpdated = m.isDone;
+          if (m.taskId === 'identity_post') routine.items.identityPostDone = m.isDone;
+        });
+      }
       if (updates.notes !== undefined) routine.notes = updates.notes;
 
       // Dynamic tasks checklist updates
@@ -290,7 +318,12 @@ exports.updateRoutineProgress = async (req, res) => {
       }
     }
 
-    const { percentage, isCompleted } = computePercentage(routine, account);
+    const settings = await SystemSetting.getSettings();
+    const { percentage, isCompleted } = computePercentage(
+      routine,
+      account,
+      settings.mandatoryDailyTasks
+    );
     routine.completionPercentage = percentage;
     routine.isCompleted = isCompleted;
     await routine.save();
@@ -353,6 +386,10 @@ exports.submitDailyWork = async (req, res) => {
         maritalStatusUpdated: routine?.items?.maritalStatusUpdated || false,
         schoolCollegeUpdated: routine?.items?.schoolCollegeUpdated || false,
         identityPostDone: routine?.items?.identityPostDone || false,
+        mandatoryChecklist: (routine?.items?.mandatoryChecklist || []).map((m) => ({
+          taskId: m.taskId,
+          isDone: m.isDone,
+        })),
         commentsCount: routine?.items?.commentsCount || 0,
         communityRepliesCount: routine?.items?.communityRepliesCount || 0,
         storyPostDone: routine?.items?.storyPostDone || false,
